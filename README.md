@@ -133,9 +133,9 @@ Key 能读账单时不需要 Cookie；读不到时面板会说明原因。
 
 代理类插件会替换 `globalThis.fetch`，在请求出站时重新序列化 body。billion-context 的 ACP 循环就是其中之一：只要模型 id 命中 `/deepseek/i`，它就给每条带 `tool_calls` 的 assistant 消息补上 `reasoning_content: ""`，而 `deepseek-v4-1-flash-1017` 正好命中。Mistral 不接受 assistant 消息上的这个字段，于是第一次工具调用之后的每一轮都变成 `422 extra_forbidden`。同进程里的插件无法替换 `node:https`，所以适配器构造出的字节就是真正出站的字节。
 
-- 设 `DSH_MISTRAL_TRANSPORT=fetch` 可退回旧路径；只有在确认没有包装层会改写 body 时才该这么做。
+- 设 `advanced.transport: fetch`（或环境变量 `DSH_MISTRAL_TRANSPORT=fetch`）可退回 fetch 路径。只有在 billion-context 已经修好之后才该这么做：先跑 `node ~/.dsh/bili-strict-echo-doctor.mjs --check`，返回 0 表示它不再给 Mistral 请求补 `reasoning_content`；此时 fetch 路径既能让压缩等包装层重新生效，又不会重现 422。
 - 配置了 `advanced.proxy` 时仍走 fetch + undici `ProxyAgent`，因为那条路径需要 dispatcher。
-- 代价：这样发出的流量不再经过代理插件的压缩与改写。正确性优先；`dsh-our-free-model` 记录过同样的取舍（见其 issue #50）。
+- 代价：走 `node:https` 时发出的流量不经过代理插件的压缩与改写。正确性优先；`dsh-our-free-model` 记录过同样的取舍（见其 issue #50）。
 
 每次请求都会向 `%TEMP%\dsh-mistral-wire.log` 追加一行（可用 `DSH_MISTRAL_WIRE_LOG` 改路径）：模型 id、消息条数、每条消息的 role 与键名、带 `reasoning_content` 的消息数，以及序列化 body 的 16 位 SHA-256。`/plugins/dsh-mistral-pro/wire?limit=20` 返回最新的若干条。日志保留 400 行，写日志失败不会影响请求。
 

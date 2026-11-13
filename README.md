@@ -94,6 +94,14 @@ Key 能读账单时不需要 Cookie；读不到时面板会说明原因。
 - 遇到 401 / 403、429、额度耗尽、Key 缺失或格式错误时，自动尝试下一个账号，原账号默认冷却 300 秒。
 - 一旦已经产出正文、思考内容或工具调用，报错时直接中止，不再中途换号，以免把两个账号的回复拼在一起。
 
+## 提示词缓存
+
+每次请求都会带上 `prompt_cache_key`，并以同值的 `x-affinity` 头把请求固定到同一台服务器；`stream_options.include_usage` 让流里带回用量，缓存命中才能在 `usage.prompt_tokens_details.cached_tokens` 里被看到。之前不带 key 时，前缀再稳定也拿不到命中数据。
+
+- 默认 key 由本机主机名与用户名派生，跨会话、跨重启保持稳定，同一台机器上的所有会话共用它。
+- 需要区分身份（例如两个 Vibe 订阅）时，在配置里填 `cache.promptCacheKey` 覆盖默认值。
+- `cache.affinity` 与 `cache.reportUsage` 可单独关闭；关掉 `reportUsage` 就同时失去缓存命中数字。
+
 ## 设置项
 
 - **账号**：增删、排序、启停、写入 Key（保存并启用）、连通性测试。

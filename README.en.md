@@ -94,6 +94,14 @@ Account failover only triggers before the stream emits content:
 - On 401 / 403, 429, quota exhaustion, or a missing/invalid key, the adapter switches to the next account and places the failed one on a 300-second in-memory cooldown.
 - Once text, reasoning, or a tool call has been emitted, errors are surfaced directly without switching accounts so partial responses from different accounts are never mixed.
 
+## Prompt cache
+
+Every request carries `prompt_cache_key` and an `x-affinity` header with the same value, so the turns of one conversation land on the same server. `stream_options.include_usage` brings usage back in the stream, which is what makes `usage.prompt_tokens_details.cached_tokens` observable at all. Without a key the prefix could be identical and the hit would still never be reported.
+
+- The default key is derived from this machine's hostname and user, stable across sessions and restarts; every session on the machine shares it.
+- Set `cache.promptCacheKey` when identities have to differ, for example two Vibe subscriptions.
+- `cache.affinity` and `cache.reportUsage` can be turned off independently; turning off `reportUsage` also costs you the cache-hit numbers.
+
 ## Settings
 
 - **Accounts**: add, remove, reorder, enable/disable, store a key (save & enable), test connectivity.

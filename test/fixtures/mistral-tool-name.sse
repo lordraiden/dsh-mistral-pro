@@ -1,0 +1,16 @@
+﻿data: {"id":"7b2788438aa94c9eb8cd05cdbdfa066a","object":"chat.completion.chunk","created":1794588863,"model":"deepseek-v4-1-flash-1017","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"7b2788438aa94c9eb8cd05cdbdfa066a","object":"chat.completion.chunk","created":1794588863,"model":"deepseek-v4-1-flash-1017","choices":[{"index":0,"delta":{"role":"assistant","index":0,"content":""},"finish_reason":null}]}
+
+data: {"id":"7b2788438aa94c9eb8cd05cdbdfa066a","object":"chat.completion.chunk","created":1794588863,"model":"deepseek-v4-1-flash-1017","choices":[{"index":0,"delta":{"tool_calls":[{"id":"chatcmpl-tool-8d2d17bcf504eb84","type":"function","function":{"name":"run_shell","arguments":""},"index":0}],"index":0,"content":""},"finish_reason":null}]}
+
+data: {"id":"7b2788438aa94c9eb8cd05cdbdfa066a","object":"chat.completion.chunk","created":1794588863,"model":"deepseek-v4-1-flash-1017","choices":[{"index":0,"delta":{"tool_calls":[{"function":{"name":"","arguments":"{\"command\": \""},"index":0}],"index":0,"content":""},"finish_reason":null}]}
+
+data: {"id":"7b2788438aa94c9eb8cd05cdbdfa066a","object":"chat.completion.chunk","created":1794588863,"model":"deepseek-v4-1-flash-1017","choices":[{"index":0,"delta":{"tool_calls":[{"function":{"name":"","arguments":"echo hi"},"index":0}],"index":0,"content":""},"finish_reason":null}]}
+
+data: {"id":"7b2788438aa94c9eb8cd05cdbdfa066a","object":"chat.completion.chunk","created":1794588863,"model":"deepseek-v4-1-flash-1017","choices":[{"index":0,"delta":{"tool_calls":[{"function":{"name":"","arguments":"\"}"},"index":0}],"index":0,"content":""},"finish_reason":null}]}
+
+data: {"id":"7b2788438aa94c9eb8cd05cdbdfa066a","object":"chat.completion.chunk","created":1794588863,"model":"deepseek-v4-1-flash-1017","choices":[{"index":0,"delta":{"index":0,"content":""},"finish_reason":"tool_calls","response_error":{"format_error":null,"content_validation":[],"tool_calls_validation":["valid_tool_call"],"extra_tags":[]}}],"usage":{"prompt_tokens":287,"total_tokens":327,"completion_tokens":40,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens_details":{"reasoning_tokens":0}}}
+
+data: [DONE]
+

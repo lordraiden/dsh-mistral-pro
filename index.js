@@ -12,6 +12,7 @@ import { resolveCatalog, isVisible } from './lib/catalog.js'
 import { AccountPool, resolveAccountKey } from './lib/accounts.js'
 import { MistralProAdapter } from './lib/adapter.js'
 import { createUsageService } from './lib/usage.js'
+import { readWire, wireLogPath } from './lib/wire.js'
 
 export { Config }
 export const name = 'dsh-mistral-pro'
@@ -237,6 +238,12 @@ export function apply(ctx, config) {
         deprecated: model.deprecated === true,
       }))
       return json({ ok: true, models })
+    })
+
+    route('/wire', async (request) => {
+      const url = new URL(request.url)
+      const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 20) || 20, 1), 200)
+      return json({ ok: true, path: wireLogPath(), entries: readWire(limit) })
     })
 
     route('/usage', async (request) => {

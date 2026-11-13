@@ -125,6 +125,19 @@ Same-origin read-only routes registered for troubleshooting:
 | `/plugins/dsh-mistral-pro/test?account=` | run a `/v1/models` check against a specific account |
 | `/plugins/dsh-mistral-pro/refresh` | force a live model catalog refresh |
 | `/plugins/dsh-mistral-pro/settings` | settings namespace and revision |
+| `/plugins/dsh-mistral-pro/wire?limit=20` | newest wire fingerprints and per-message key layout |
+
+## Transport and the wire log
+
+The chat request is posted over `node:https` with the body the adapter already serialized, not through `globalThis.fetch`.
+
+Proxy plugins replace `globalThis.fetch` and re-serialize request bodies on the way out. billion-context's ACP loop, for one, adds `reasoning_content: ""` to every assistant tool-call message whenever the model id matches `/deepseek/i` — and `deepseek-v4-1-flash-1017` does. Mistral forbids that field on assistant messages, so the rewrite turns every turn after the first tool call into `422 extra_forbidden`. `node:https` cannot be patched by another plugin in the same process, so the bytes the adapter builds are the bytes that leave the machine.
+
+- `DSH_MISTRAL_TRANSPORT=fetch` restores the old path; use it only when no wrapper rewrites bodies.
+- A configured `advanced.proxy` always uses fetch + undici `ProxyAgent`, because that path needs the dispatcher.
+- Trade-off: traffic sent this way skips a proxy plugin's compression and rewrite. Correctness comes first; `dsh-our-free-model` documents the same trade-off (its issue #50).
+
+Every request appends one line to `%TEMP%\dsh-mistral-wire.log` (override with `DSH_MISTRAL_WIRE_LOG`): model id, message count, each message's role and keys, how many messages carry `reasoning_content`, and a 16-hex SHA-256 of the serialized body. `/plugins/dsh-mistral-pro/wire?limit=20` returns the newest entries. The log is trimmed to 400 lines and a logging failure never interrupts a call.
 
 ## Data & Privacy
 

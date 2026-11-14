@@ -72,6 +72,15 @@
     "updated": "{when} 更新",
     "refresh": "刷新"
   },
+  "cache": {
+    "title": "Prompt 缓存",
+    "summary": "命中率 {rate} · {count} 次请求",
+    "tokens": "{cached} / {total} 个 prompt token 命中缓存",
+    "last": "最近一次：{rate} · {model}",
+    "empty": "还没有记录到缓存请求。",
+    "unavailable": "缓存统计不可用。",
+    "refresh": "刷新缓存"
+  },
   "advanced": {
     "title": "高级设置",
     "baseURL": "默认接口地址",
@@ -85,6 +94,7 @@
     "cacheAffinity": "发送 x-affinity（未文档化的缓存路由提示）",
     "cacheReportUsage": "上报流式用量（缓存 token）",
     "cacheReportUsageHint": "关闭后也将看不到缓存命中的 token 数。",
+    "showCache": "显示 Prompt 缓存命中率",
     "transport": "传输方式",
     "transportHint": "https 通过 node:https 发送序列化后的请求体（默认，推荐）；fetch 允许进程内的包装层读取并改写请求。",
     "proxy": "代理地址（http/https/socks5）",

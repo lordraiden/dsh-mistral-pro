@@ -2,7 +2,7 @@
 
 **DeepSeek Harness（DSH）で Mistral のサブスクリプション（Vibe Pro / Team）を使うためのモデルプロバイダープラグインです。** `mistral-pro` モデルルート、複数アカウントのフェイルオーバー、プロンプトキャッシュのチューニング、入力欄ツールバーの使用量パネルを提供します。
 
-![version](https://img.shields.io/badge/version-0.4.1-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.5.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -196,9 +196,13 @@ Mistral の[プロンプトキャッシュ](https://docs.mistral.ai/inference/co
 
 プラグインは同じ値を `x-affinity` ヘッダーとしても送信します。このヘッダーは**未公開かつ未検証**です。Mistral のプロンプトキャッシュのドキュメントには記載がなく、ライブ API に対する A/B 実行でもキャッシュヒットに差は測れませんでした（ヘッダーありで 7/8、なしで 8/8。唯一のミスは最初のコールドコール）。残しているのは、サードパーティの証拠がキャッシュルーティングに影響しうることを示唆していること、このヘッダーを知らないサーバーは無視すること、そして削除しても中立であることを示せないことによります。リクエストが同じサーバーに届く保証ではなく、役立つ可能性のあるヒントとして扱ってください。`cache.affinity` と `cache.reportUsage` は個別に無効化できます。`reportUsage` を無効にすると、キャッシュヒットの数値も失います。
 
-実際に何が起きたかを確認するには、`GET /plugins/dsh-mistral-pro/wire?limit=20` を使います。各リクエストの `usage` エントリに `promptTokens` と `cachedTokens` が含まれます。プレフィックスが安定しているのにヒット率がほぼ 0% の場合、プロンプトが 64 トークン未満であるか、ターン間でキャッシュが期限切れになったか、上流で最初のメッセージが書き換えられているかのいずれかです。
+実際に何が起きたかを確認するには、`GET /plugins/dsh-mistral-pro/wire?limit=20` を使います。各リクエストの `usage` エントリに `promptTokens`、`cachedTokens`、応答した `account`、`conversation` ダイジェスト、そして新しいターンを除く全メッセージの `prefixSha256` ダイジェストが含まれます。プレフィックスが安定しているのにヒット率がほぼ 0% の場合、プロンプトが 64 トークン未満であるか、ターン間でキャッシュが期限切れになったか、上流で最初のメッセージが書き換えられているかのいずれかです。
 
-`GET /plugins/dsh-mistral-pro/cache` はログ全体を `requests`、`promptTokens`、`cachedTokens`、`hitRate` に集計し、最新 20 件の usage エントリも返します。
+`GET /plugins/dsh-mistral-pro/cache` はログ全体の `requests`、`promptTokens`、`cachedTokens`、`hitRate` に加えて、「なぜ低いのか」に答える 3 つのビューを返します:
+
+- `steadyState` — 各会話の最初のリクエスト（必ずコールド）を除いた同じ数値;
+- `distribution` — リクエストごとのヒット率がどの帯（`0`、`1-25`、`26-50`、`51-75`、`76-99`、`100`）に入ったかの件数;
+- `failovers` と `coldAfterFailover` — アカウント切り替えの回数と、その直後のコールドリクエスト。プロンプトキャッシュはアカウント単位なので、このミスは想定内です。
 
 
 ### 使用量の計上
@@ -212,6 +216,7 @@ DSH のトークン使用量は**重複しない**バケットです。`inputTok
 - **Advanced**: 自動フェイルオーバー、クールダウン、タイムアウト、カタログ更新、出力上限、プロンプトキャッシュキー、キャッシュアフィニティ、ストリーム使用量の報告、トランスポート、プロキシ、ボタンの表示モード、更新間隔、任意の Cookie フォールバック
   - **x-affinity を送信**（`cache.affinity`、既定でオン）: キャッシュキーを `x-affinity` として送信します。未公開で未検証のキャッシュルーティングヒントです（[プロンプトキャッシュ](#プロンプトキャッシュ)を参照）。
   - **ストリーム使用量を報告**（`cache.reportUsage`、既定でオン）: `stream_options.include_usage` を送信します。オフにすると `cachedTokens` の数値も表示されなくなります。
+  - **プロンプトキャッシュのヒット率を表示**（`usage.showCache`、既定でオン）: `/cache` を読むポップオーバーのセクションで、ヒット率、キャッシュ済み / 合計プロンプトトークン、直近のリクエストを表示します。
   - **トランスポート**（`advanced.transport`、既定値 `https`）: `https` はシリアライズ済みのボディを `node:https` で送信します。`fetch` は `globalThis.fetch` を経由するため、プロセス内のラッパーがリクエストを確認・書き換えできます。
 
 ![DeepSeek Harness の Mistral Pro 設定画面。アカウント、モデル、詳細設定のセクション](docs/images/settings-ja.png)
@@ -231,8 +236,8 @@ DSH のトークン使用量は**重複しない**バケットです。`inputTok
 | `/plugins/dsh-mistral-pro/test?account=` | 指定アカウントでの `/v1/models` 疎通確認 |
 | `/plugins/dsh-mistral-pro/refresh` | モデルカタログの即時更新 |
 | `/plugins/dsh-mistral-pro/settings` | 設定の名前空間と revision |
-| `/plugins/dsh-mistral-pro/wire?limit=20` | 最新の wire フィンガープリント、メッセージごとのキー構成、キャッシュ使用量 |
-| `/plugins/dsh-mistral-pro/cache` | プロンプトキャッシュの集計ヒット率と最新 20 件の usage エントリ |
+| `/plugins/dsh-mistral-pro/wire?limit=20` | 最新の wire フィンガープリント、メッセージごとのキー構成、キャッシュ使用量、会話 ID、プレフィックスダイジェスト、応答アカウント |
+| `/plugins/dsh-mistral-pro/cache` | 集計と定常状態のヒット率、リクエストごとの分布、フェイルオーバー回数、最新 20 件の usage エントリ |
 
 ## トランスポートと wire ログ
 
@@ -244,7 +249,7 @@ DSH のトークン使用量は**重複しない**バケットです。`inputTok
 - `advanced.proxy` を設定した場合は常に fetch + undici の `ProxyAgent` を使います。このパスには dispatcher が必要だからです。
 - トレードオフ: この経路で送った通信は、プロキシ系プラグインの圧縮や書き換えを通りません。正確さを優先します。
 
-リクエストごとに `%TEMP%\dsh-mistral-wire.log` へ 1 行追記します（`DSH_MISTRAL_WIRE_LOG` で変更可能）: モデル ID、メッセージ数、各メッセージの role とキー、`reasoning_content` を持つメッセージ数、シリアライズしたボディの 16 桁の SHA-256 です。2 行目の `usage` 行には `promptTokens` と `cachedTokens` が記録されます。ログは 400 行に切り詰められ、ログ出力の失敗がリクエストを中断することはありません。
+リクエストごとに `%TEMP%\dsh-mistral-wire.log` へ 1 行追記します（`DSH_MISTRAL_WIRE_LOG` で変更可能）: モデル ID、メッセージ数、各メッセージの role とキー、`reasoning_content` を持つメッセージ数、シリアライズしたボディの 16 桁の SHA-256 です。2 行目の `usage` 行には `promptTokens`、`cachedTokens`、応答した `account`、`conversation` ダイジェスト、`prefixSha256`、`messages`、`prefixMessages` が記録されます。アカウント切り替え時は `failover` 行が `from`、`to`、失敗コード付きで追加されます。ログは 400 行に切り詰められ、ログ出力の失敗がリクエストを中断することはありません。
 
 ログはモード `0600` で作成されます。`%TEMP%` は通常 `/tmp`（`1777`）で、ログの内容はプロンプトのメタデータです。古いバージョンがファイルを誰でも読める状態で残していた場合、次の書き込みで `0600` に引き締められ、ローテーションでもそのモードが保たれます。
 
@@ -264,7 +269,7 @@ DSH のトークン使用量は**重複しない**バケットです。`inputTok
 
 ### プロンプトキャッシュのヒット率が 0% なのはなぜですか？
 
-多くの場合、次の 3 つのいずれかです: プロンプトが 64 トークン未満、ターン間でキャッシュが期限切れ、上流で最初のメッセージが書き換えられている。`/plugins/dsh-mistral-pro/wire?limit=20` でリクエストごとの `cachedTokens` を、`/plugins/dsh-mistral-pro/cache` で集計ヒット率を確認してください。
+多くの場合、次の 3 つのいずれかです: プロンプトが 64 トークン未満、ターン間でキャッシュが期限切れ、上流で最初のメッセージが書き換えられている。`/plugins/dsh-mistral-pro/wire?limit=20` でリクエストごとの `cachedTokens` と `prefixSha256` を、`/plugins/dsh-mistral-pro/cache` で定常状態のヒット率と分布を確認してください。ログ全体のヒット率が低く定常状態が高い場合は、キャッシュの故障ではなくコールドスタートです。
 
 ### API キーが Mistral 以外に送られることはありますか？
 

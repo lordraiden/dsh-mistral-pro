@@ -4,6 +4,29 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.5.0
+
+### Cache observability
+
+- **#24 — `/cache` separates cold starts from warm requests.** New `steadyState` (the hit rate without each
+  conversation's first request), `distribution` (per-request hit-rate buckets) and `recent[].hitRate`. The
+  `usage` wire entry gains `conversation`, a 16-hex digest of `prompt_cache_key`; the raw key is never
+  logged, and the field is omitted when the request carries none.
+- **#25 — the wire log fingerprints the message prefix.** `prefixSha256` (everything except the new turn),
+  `messages` and `prefixMessages` let `/wire` separate a rewritten prefix — an actionable bug — from a
+  provider-side eviction, which is not observable from the client.
+- **#26 — requests are attributed to an account.** `usage` entries carry `account` (the display name, else
+  a digest of `apiKeyEnv`), a `failover` entry is appended per account switch, and `/cache` reports
+  `failovers` and `coldAfterFailover`: prompt caches are per account, so the first request after a switch
+  is a full miss by design.
+- **#27 — the usage popover shows the prompt-cache hit rate.** Overall rate, cached / total prompt tokens
+  and the last request, with a refresh action; `usage.showCache` (default on) hides the section.
+
+### Tests
+
+- `test/cache-metrics.mjs` and `test/prefix-fingerprint.mjs` added; `test/failover.mjs` extended with the
+  account attribution and failover-entry assertions. 14 suites.
+
 ## 0.4.1
 
 ### Fixed

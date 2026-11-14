@@ -2,7 +2,7 @@
 
 **在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）中接入 Mistral 订阅（Vibe Pro / Team）的模型提供方插件。** 提供 `mistral-pro` 模型路由、多账号故障切换、提示词缓存调优，以及输入框工具栏的订阅额度面板。
 
-![version](https://img.shields.io/badge/version-0.4.1-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.5.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -196,9 +196,13 @@ Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/adv
 
 插件还会发送同值的 `x-affinity` 头。该头**未公开且未经验证**：Mistral 的提示词缓存文档没有提到它，针对线上 API 的 A/B 测试也没有测出缓存命中差异（带头 7/8，不带头 8/8；唯一的未命中是第一次冷调用）。保留它是因为第三方证据表明它可能影响缓存路由，不认识它的服务器会忽略它，而移除它无法被证明是中性的——把它当作可能有帮助的提示，而不是请求会落到同一台服务器的保证。`cache.affinity` 与 `cache.reportUsage` 可单独关闭；关掉 `reportUsage` 就同时失去缓存命中数字。
 
-要确认实际发生了什么，`GET /plugins/dsh-mistral-pro/wire?limit=20` 现在会为每个请求返回一条 `usage` 记录，含 `promptTokens` 与 `cachedTokens`。前缀稳定但命中率接近 0%，通常意味着提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。
+要确认实际发生了什么，`GET /plugins/dsh-mistral-pro/wire?limit=20` 会为每个请求返回一条 `usage` 记录，含 `promptTokens`、`cachedTokens`、服务该请求的 `account`、`conversation` 摘要，以及除本轮新消息外全部内容的 `prefixSha256` 摘要。前缀稳定但命中率接近 0%，通常意味着提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。
 
-`GET /plugins/dsh-mistral-pro/cache` 会把整份日志汇总为 `requests`、`promptTokens`、`cachedTokens` 和 `hitRate`，并附带最新 20 条 usage 记录。
+`GET /plugins/dsh-mistral-pro/cache` 会汇总整份日志的 `requests`、`promptTokens`、`cachedTokens` 和 `hitRate`，并额外给出三个回答「为什么这么低」的视图：
+
+- `steadyState`——去掉每个会话第一条请求后的同一组数字，那条请求本来就必然冷启动；
+- `distribution`——每个请求的命中率落在哪个区间（`0`、`1-25`、`26-50`、`51-75`、`76-99`、`100`）；
+- `failovers` 与 `coldAfterFailover`——账号切换次数，以及切换后紧跟的那条冷请求：提示词缓存按账号隔离，这次未命中是预期行为。
 
 
 ### 用量口径
@@ -212,6 +216,7 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 - **高级**：自动容灾、冷却、超时、目录刷新、输出上限、提示词缓存 key、缓存亲和性、流式用量上报、传输方式、代理、按钮显示模式、刷新间隔，以及可选的 Cookie 兜底。
   - **发送 x-affinity**（`cache.affinity`，默认开启）：把缓存 key 作为 `x-affinity` 发送；这是一个未公开、未经验证的缓存路由提示（见[提示词缓存](#提示词缓存)）。
   - **上报流式用量**（`cache.reportUsage`，默认开启）：发送 `stream_options.include_usage`；关闭它也会隐藏 `cachedTokens` 计数。
+  - **显示 Prompt 缓存命中率**（`usage.showCache`，默认开启）：输入框额度面板中读取 `/cache` 的那一块，展示命中率、缓存 / 总 prompt token 以及最近一次请求。
   - **传输方式**（`advanced.transport`，默认 `https`）：`https` 通过 `node:https` 发送已序列化的 body；`fetch` 走 `globalThis.fetch`，让进程内的包装层能看到并改写请求。
 
 ![DeepSeek Harness 中的 Mistral Pro 设置页：账号、模型与高级设置](docs/images/settings-zh.png)
@@ -231,8 +236,8 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 | `/plugins/dsh-mistral-pro/test?account=` | 用指定账号测试一次 `/v1/models` |
 | `/plugins/dsh-mistral-pro/refresh` | 立即刷新远端模型目录 |
 | `/plugins/dsh-mistral-pro/settings` | 设置命名空间与 revision |
-| `/plugins/dsh-mistral-pro/wire?limit=20` | 最近的 wire 指纹、逐条消息的键名布局与缓存用量 |
-| `/plugins/dsh-mistral-pro/cache` | 聚合的提示词缓存命中率与最新 20 条 usage 记录 |
+| `/plugins/dsh-mistral-pro/wire?limit=20` | 最近的 wire 指纹、逐条消息的键名布局、缓存用量、会话 id、前缀摘要与服务账号 |
+| `/plugins/dsh-mistral-pro/cache` | 聚合与稳态命中率、逐请求分布、容灾次数，以及最新 20 条 usage 记录 |
 
 ## 传输与 wire 日志
 
@@ -244,7 +249,7 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 - 配置了 `advanced.proxy` 时仍走 fetch + undici `ProxyAgent`，因为那条路径需要 dispatcher。
 - 代价：走 `node:https` 时发出的流量不经过代理插件的压缩与改写。正确性优先。
 
-每次请求都会向 `%TEMP%\dsh-mistral-wire.log` 追加一行（可用 `DSH_MISTRAL_WIRE_LOG` 改路径）：模型 id、消息条数、每条消息的 role 与键名、带 `reasoning_content` 的消息数，以及序列化 body 的 16 位 SHA-256。第二条 `usage` 行记录 `promptTokens` 与 `cachedTokens`。日志保留 400 行，写日志失败不会影响请求。
+每次请求都会向 `%TEMP%\dsh-mistral-wire.log` 追加一行（可用 `DSH_MISTRAL_WIRE_LOG` 改路径）：模型 id、消息条数、每条消息的 role 与键名、带 `reasoning_content` 的消息数，以及序列化 body 的 16 位 SHA-256。第二条 `usage` 行记录 `promptTokens`、`cachedTokens`、服务账号 `account`、`conversation` 摘要、`prefixSha256`、`messages` 与 `prefixMessages`；账号切换会追加一条 `failover` 行，含 `from`、`to` 与失败码。日志保留 400 行，写日志失败不会影响请求。
 
 日志以 `0600` 权限创建：`%TEMP%` 通常是 `/tmp`（`1777`），而日志条目是提示词元数据。如果旧版本留下了全局可读的文件，下一次写入会把它收紧到 `0600`，轮转也会保持该权限。
 
@@ -264,7 +269,7 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 
 ### 为什么提示词缓存命中率是 0%？
 
-通常是三种情况之一：提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。用 `/plugins/dsh-mistral-pro/wire?limit=20` 查看每次请求的 `cachedTokens`，用 `/plugins/dsh-mistral-pro/cache` 查看聚合命中率。
+通常是三种情况之一：提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。用 `/plugins/dsh-mistral-pro/wire?limit=20` 查看每次请求的 `cachedTokens` 与 `prefixSha256`，用 `/plugins/dsh-mistral-pro/cache` 查看稳态命中率与分布——整份日志的命中率低而稳态命中率高，说明是冷启动，不是缓存坏了。
 
 ### API Key 会被发到 Mistral 以外的地方吗？
 

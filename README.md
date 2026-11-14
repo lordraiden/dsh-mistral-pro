@@ -2,7 +2,7 @@
 
 **Mistral subscription (Vibe Pro / Team) provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).** Adds the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a subscription usage panel to the DSH composer.
 
-![version](https://img.shields.io/badge/version-0.4.1-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.5.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -248,13 +248,21 @@ do not know it ignore it, and removing it cannot be shown neutral — treat it a
 guarantee that requests land on the same server. `cache.affinity` and `cache.reportUsage` can be turned off
 independently; turning off `reportUsage` also costs you the cache-hit numbers.
 
-To see what actually happened, `GET /plugins/dsh-mistral-pro/wire?limit=20` now includes a `usage` entry per
-request with `promptTokens` and `cachedTokens`. A hit rate near 0% with a stable prefix usually means the
-prompt is under 64 tokens, the cache expired between turns, or something upstream is rewriting the first
-messages.
+To see what actually happened, `GET /plugins/dsh-mistral-pro/wire?limit=20` returns one `usage` entry per
+request with `promptTokens`, `cachedTokens`, the serving `account`, a `conversation` digest and a
+`prefixSha256` digest of everything except the new turn. A hit rate near 0% with a stable prefix usually
+means the prompt is under 64 tokens, the cache expired between turns, or something upstream is rewriting
+the first messages.
 
-`GET /plugins/dsh-mistral-pro/cache` sums the whole log into `requests`, `promptTokens`, `cachedTokens`
-and `hitRate`, plus the 20 newest usage entries.
+`GET /plugins/dsh-mistral-pro/cache` reports the whole-log `requests`, `promptTokens`, `cachedTokens` and
+`hitRate`, plus three views that answer "why is it low":
+
+- `steadyState` — the same numbers without the first request of each conversation, which is cold by
+  design;
+- `distribution` — how many requests landed in each per-request hit-rate bucket (`0`, `1-25`, `26-50`,
+  `51-75`, `76-99`, `100`);
+- `failovers` and `coldAfterFailover` — account switches and the cold request that follows one: prompt
+  caches are per account, so that miss is expected.
 
 
 ### Usage accounting
@@ -275,6 +283,8 @@ its `hitRate` stays `cachedTokens / promptTokens`.
     undocumented, unverified cache-routing hint (see [Prompt caching](#prompt-caching)).
   - **Report stream usage** (`cache.reportUsage`, on by default): sends
     `stream_options.include_usage`; turning it off also hides the `cachedTokens` counts.
+  - **Show prompt-cache hit rate** (`usage.showCache`, on by default): the popover section that reads
+    `/cache` and shows the rate, the cached / total prompt tokens and the last request.
   - **Transport** (`advanced.transport`, default `https`): `https` posts the serialized body over
     `node:https`; `fetch` routes through `globalThis.fetch` so in-process wrappers can see and rewrite
     the request.
@@ -296,8 +306,8 @@ Same-origin read-only routes registered for troubleshooting:
 | `/plugins/dsh-mistral-pro/test?account=` | run a `/v1/models` check against a specific account |
 | `/plugins/dsh-mistral-pro/refresh` | force a live model catalog refresh |
 | `/plugins/dsh-mistral-pro/settings` | settings namespace and revision |
-| `/plugins/dsh-mistral-pro/wire?limit=20` | newest wire fingerprints, per-message key layout, and cache usage |
-| `/plugins/dsh-mistral-pro/cache` | aggregate prompt-cache hit rate and the 20 newest usage entries |
+| `/plugins/dsh-mistral-pro/wire?limit=20` | newest wire fingerprints, per-message key layout, cache usage, conversation id, prefix digest and serving account |
+| `/plugins/dsh-mistral-pro/cache` | aggregate and steady-state hit rate, per-request distribution, failover counts, and the 20 newest usage entries |
 
 ## Transport and the wire log
 
@@ -318,8 +328,10 @@ leave the machine.
 
 Every request appends one line to `%TEMP%\dsh-mistral-wire.log` (override with `DSH_MISTRAL_WIRE_LOG`):
 model id, message count, each message's role and keys, how many messages carry `reasoning_content`, and a
-16-hex SHA-256 of the serialized body. A second `usage` line records `promptTokens` and `cachedTokens`. The
-log is trimmed to 400 lines and a logging failure never interrupts a call.
+16-hex SHA-256 of the serialized body. A second `usage` line records `promptTokens`, `cachedTokens`, the
+serving `account`, the `conversation` digest, `prefixSha256`, `messages` and `prefixMessages`; an account
+switch appends a `failover` line with `from`, `to` and the failure code. The log is trimmed to 400 lines and
+a logging failure never interrupts a call.
 
 The log is created with mode `0600`: `%TEMP%` is usually `/tmp` (`1777`), and the entries are prompt
 metadata. If an older version left the file world-readable, the next write tightens it to `0600`, and
@@ -347,7 +359,8 @@ that service is unavailable).
 
 Usually one of three things: the prompt is under 64 tokens, the cache expired between turns, or something
 upstream is rewriting the first messages. Check `/plugins/dsh-mistral-pro/wire?limit=20` for the per-request
-`cachedTokens`, and `/plugins/dsh-mistral-pro/cache` for the aggregate hit rate.
+`cachedTokens` and `prefixSha256`, and `/plugins/dsh-mistral-pro/cache` for the steady-state rate and the
+distribution — a low whole-log rate with a high steady-state rate means cold starts, not a broken cache.
 
 ### Is my API key sent anywhere besides Mistral?
 

@@ -10,6 +10,10 @@
     "dsh": ">=0.2.1-rc.5"
   },
   "main": "./index.js",
+  "scripts": {
+    "test": "node test/run.mjs",
+    "check": "node --check index.js && node --check client.js && node --check lib/adapter.js && node --check lib/config.js && node --check lib/catalog.js && node --check lib/transport.js && node --check lib/wire.js && node --check lib/usage.js && node --check lib/accounts.js"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

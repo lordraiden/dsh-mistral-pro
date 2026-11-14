@@ -82,7 +82,7 @@
     "modelsRefresh": "Model catalog refresh (minutes)",
     "maxTokensCap": "Default output cap (tokens)",
     "promptCacheKey": "Prompt cache key (empty = auto, \"off\" = disable)",
-    "cacheAffinity": "Send x-affinity (pin requests to one server)",
+    "cacheAffinity": "Send x-affinity (undocumented cache-routing hint)",
     "cacheReportUsage": "Report stream usage (cached tokens)",
     "cacheReportUsageHint": "Turning this off also hides cached-token counts.",
     "transport": "Transport",

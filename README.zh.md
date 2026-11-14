@@ -1,37 +1,79 @@
 ### dsh-mistral-pro
 
-在 DeepSeek Harness 中接入 Mistral 订阅（Vibe Pro / Team），提供 `mistral-pro` 模型路由、多账号故障切换和输入框工具栏的额度面板。
+在 DeepSeek Harness 中接入 Mistral 订阅（Vibe Pro / Team），提供 `mistral-pro` 模型路由、多账号故障切换、提示词缓存调优和输入框工具栏的额度面板。
 
-![version](https://img.shields.io/badge/version-0.3.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.4.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
-
-> 英文版 [README.md](README.md) 是权威版本，可能比本译文更新。
 
 ---
 
 ![Mistral Pro 额度面板](docs/images/usage-zh.png)
 
+> **这是 fork。** [`lordraiden/dsh-mistral-pro`](https://github.com/lordraiden/dsh-mistral-pro) 合并了上游 `0.1.2` 之上的两条独立修复线：[`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro)（0.2.0–0.2.4）和[上游 issue #1 补丁系列](https://github.com/01NGVI-QINGYI/dsh-mistral-pro/issues/1)（0.1.3–0.1.8）。完整的合并过程见 [CHANGELOG.md](CHANGELOG.md)。
+
+> 英文版 [README.md](README.md) 是权威版本，可能比本译文更新。
+
+## 0.4.0 的变更
+
+0.4.0 关闭了针对 0.3.0 提出的审计问题。默认情况下提供方行为不变；本次发布让既有行为得到测试、可观测并有文档记录。
+
+- **CI 与真正的测试入口。** `npm test` 会发现每个 `test/*.mjs` 测试套件，`npm run check` 对每个随包发布的文件做语法检查；GitHub Actions 会在每次推送到 `main` 和每个针对 `main` 的 pull request 上，用 Node 22 和 24 分别运行这两项。
+- **新增覆盖**：原生传输（请求体逐字节一致）、账号容灾（仅在输出前触发）、截断的流（`TRANSPORT`）、重试策略结构，以及两种缓存 key 模式。
+- **`shared` 不再退化**为仅按模型派生的 key：会话没有系统消息时，它会回退到按会话派生的 `auto`。
+- **缓存 key 每次上下文压缩后轮换一次**，使用 DSH 放在替换用户消息上的检查点。从不压缩的会话保持完全相同的 key。
+- **会检查结束块中的 `response_error`。** 校验失败会写入日志，不可用的工具调用会抛出 `MALFORMED_RESPONSE` 而不是被派发；重试策略会重新执行该请求。
+- **新增 `/cache` 调试路由**，把 wire 日志聚合为请求数、prompt / 缓存 token 和命中率。
+- **wire 日志以 `0600` 创建**，已存在的更宽松权限文件会在下次写入时收紧。
+- **设置界面**：`cache.affinity`、`cache.reportUsage` 和 `advanced.transport` 可在 设置 → Mistral Pro → 高级设置 中编辑。
+- **文档**：中文和日文 README 已恢复与英文版一致，`CONTRIBUTING.md` 记录了上游同步策略和独立版本策略。
+- **`x-affinity` 按其本来面目记录**：一个未公开、未经验证的缓存路由提示（见[提示词缓存](#提示词缓存)）。
+
+## 0.3.0 的变更
+
+- **工具调用不再以 `unknown tool ""` 到达。** Mistral 会在流式工具调用的每个续传分片上重复 `function.name: ""`；累加器现在只接受非空名字，并保留它看到的第一个名字。
+- **每个块只发一次 `block-start`**，流式输出时思考面板不再反复折叠。
+- **`tool-call-delta` 上的 `id` 始终是字符串**，这是 harness 流式协议的要求。
+- **重试策略是解析后的扁平结构**，第一次瞬时失败不再以 `session event "llm/retry" carries non-JSON-serializable data` 结束。
+- **截断的流会抛出 `TRANSPORT`**，而不是带着部分输出「成功」结束本轮。
+- **不再注入 `max_tokens` 上限**（`advanced.maxTokensCap` 默认 `0`）。推理与正文共享补全预算，看似宽裕的上限也可能被思考内容耗尽。
+- **工具调用会提交尝试状态。** 工具调用之后的中途失败不再触发账号切换，也就不会把两个账号的输出拼进同一轮。
+- **提示词缓存调优**：`advanced.promptCacheKey` 现在支持 `auto`、`shared`、`off` 或自定义字符串，`/wire` 会记录每次请求实际返回的 `cached_tokens`。
+
 ## 安装
 
 环境要求：DSH `>= 0.2.1-rc.5`，Node `^22.19.0 || >=24.0.0`。
 
-推荐打包成 tarball 安装：
+安装固定到发布 tag 的 fork：
+
+```sh
+dsh plugin --profile web add github:lordraiden/dsh-mistral-pro#v0.4.0
+```
+
+或者写进 profile 的 `package.json` 再安装：
+
+```json
+{
+  "dependencies": {
+    "dsh-mistral-pro": "github:lordraiden/dsh-mistral-pro#v0.4.0"
+  }
+}
+```
+
+```sh
+pnpm install
+```
+
+从本地检出安装时，推荐打包成 tarball，也可以直接挂载目录：
 
 ```sh
 npm pack
-dsh plugin --profile desktop add /absolute/path/to/dsh-mistral-pro-0.1.0.tgz
-```
-
-本地开发也可以直接挂载目录：
-
-```sh
-dsh plugin --profile desktop add /absolute/path/to/dsh-mistral-pro
+dsh plugin --profile web add /absolute/path/to/dsh-mistral-pro-0.4.0.tgz
 ```
 
 按目录添加会创建符号链接。由于 pnpm 不会为符号链接解析 `peerDependencies`，仓库内预置了指向当前 profile 共享依赖的 `node_modules/@deepseek-ai/*` 软链（打包 tarball 时不会包含）。
 
-安装后到 **插件** 页面启用 `dsh-mistral-pro`，刷新页面即可。
+安装后到 **插件** 页面启用 `dsh-mistral-pro` 并刷新页面。更换已安装版本后需要重启宿主。
 
 ## 添加账号
 
@@ -67,7 +109,7 @@ API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页�
 
 ## 额度面板
 
-输入框工具栏右侧（OpenCode Go 胶囊旁）会多出一个 `● Mistral` 按钮，点击可查看：
+插件会在输入框工具栏添加一个 `● Mistral` 按钮，点击可查看：
 
 - 各周期额度的使用比例、已用 / 总量及重置倒计时；
 - 预付余额与当月 API 账单消耗；
@@ -83,9 +125,7 @@ API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页�
 2. 打开浏览器开发者工具 → Network，任选一条发往 `admin.mistral.ai` 的请求，复制完整的 `Cookie` 请求头（需包含 `ory_session_*`；若含 `csrftoken`，插件会自动附带 `X-CSRFTOKEN`）。
 3. 打开 **设置 → Mistral Pro → 高级设置**，粘贴并点击「设置 Cookie」。
 
-Cookie 路径会请求 `GET /subscription`、`GET /api/billing/v2/usage?month=&year=` 和 `GET /api/billing/credits`，单个接口失败不影响其余数据展示；会话过期跳转到登录页时会在面板内提示更换。
-
-Key 能读账单时不需要 Cookie；读不到时面板会说明原因。
+Cookie 路径会分别请求 `GET /subscription`、`GET /api/billing/v2/usage?month=&year=` 和 `GET /api/billing/credits`，单个接口失败不影响其余数据展示；会话过期跳转到登录页时会在面板内提示更换。
 
 ## 请求与容灾
 
@@ -98,30 +138,49 @@ Key 能读账单时不需要 Cookie；读不到时面板会说明原因。
 
 ## 提示词缓存
 
-Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/advanced/prompt-caching)在请求共享同一**前缀**时复用已计算的 token，缓存 token 按标准输入价的 10% 计费，命中数在 `usage.prompt_tokens_details.cached_tokens` 里返回。
+Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/advanced/prompt-caching)在请求共享同一**前缀**时复用已计算的 prompt token，缓存 token 按标准输入价的 10% 计费，命中数在 `usage.prompt_tokens_details.cached_tokens` 里返回。
 
-两个关键事实：`prompt_cache_key` 只是**路由提示**，它"提高命中概率但不保证命中"，真正决定命中与否的是前缀是否稳定；缓存块为 **64 token**，`cached_tokens` 永远是 64 的倍数，少于 64 token 的提示词永远不会命中。
+文档里的两个事实决定了这里的每一项设计：
 
-插件为保证前缀稳定所做的处理：不注入任何易变内容（时间戳、会话 id、计数器）；保持消息顺序，并把助手推理以 `thinking` 块回放，使前缀在轮次之间逐字节一致；按角色丢弃非协议字段（`sanitizeMessage`），避免某一轮多出字段而改变前缀；发送 `stream_options.include_usage`，否则 `cached_tokens` 根本不会被上报。
+- `prompt_cache_key` 是**路由提示**。它「提高命中概率，但不保证命中」——是否命中取决于 API 能否找到兼容的已缓存前缀。Key 不会创建缓存，前缀的稳定性才会。
+- 缓存块为 **64 token**。`cached_tokens` 永远是 64 的倍数，少于 64 token 的提示词永远不会命中。共享前缀越长，复用得越多。
+
+插件为保证前缀稳定所做的处理：
+
+- 不向请求注入任何易变内容（时间戳、会话 id、计数器）。
+- 保持消息顺序，并把助手推理以 `thinking` 块回放，使前缀在轮次之间逐字节一致。
+- 按角色确定性地丢弃非协议字段（`sanitizeMessage`），避免某一轮多出字段而改变前缀。
+- 发送 `stream_options.include_usage`，否则 `cached_tokens` 根本不会被上报。
 
 `advanced.promptCacheKey` 选择 key 的派生方式：
 
 | 取值 | 派生方式 | 适用场景 |
 | --- | --- | --- |
 | `auto`（默认） | 模型 + 系统提示词 + 首条用户消息 | 单个长会话：每轮追加都保持同一个 key。 |
-| `shared` | 仅模型 + 系统提示词 | 大量短会话复用同一份（较大的）系统提示词：新会话第一轮也能命中系统提示词前缀。 |
+| `shared` | 仅模型 + 系统提示词；会话没有系统/开发者消息时回退到 `auto` | 大量短会话复用同一份（较大的）系统提示词：新会话第一轮也能命中系统提示词前缀。 |
 | `off` | 不发送该字段 | 拒绝该字段的提供方或代理。 |
 | 其他字符串 | 原样发送 | 自行管理 key（按工作流、团队或订阅区分）。 |
 
-`auto` 与 `shared` 是取舍而非优劣：`auto` 隔离会话，符合 Mistral 的建议（"使用稳定的应用级标识，例如会话 ID"）；`shared` 放弃隔离以换取跨会话复用系统提示词。提供方仍会校验前缀兼容性，因此共享 key 最多只是未命中，绝不会返回其他会话的内容。
+`auto` 与 `shared` 是取舍而非优劣：`auto` 隔离会话，符合 Mistral 的建议（「使用稳定的应用级标识，例如会话 ID」）；`shared` 放弃隔离以换取跨会话复用系统提示词。提供方仍会校验前缀兼容性，因此共享 key 最多只是未命中，绝不会返回其他会话的内容。
 
-插件还会发送同值的 `x-affinity` 头，让同一会话的请求落到同一台服务器。`cache.affinity` 与 `cache.reportUsage` 可单独关闭；关掉 `reportUsage` 就同时失去缓存命中数字。`GET /plugins/dsh-mistral-pro/wire?limit=20` 现在会为每个请求返回一条 `usage` 记录，含 `promptTokens` 与 `cachedTokens`。
+如果开头没有系统或开发者消息，就没有可复用的共享前缀，`shared` 会回退到按会话派生的 `auto` key，而不是发出一个该模型上所有会话都会共享的、仅按模型派生的 key。
+
+压缩会重写对话前缀，因此派生 key（`auto` 与 `shared`）每次压缩后轮换一次：DSH 压缩检查点上最新的 `compactionId` 会混入哈希，让重写后的前缀拥有干净的缓存条目，而不是被归到指向旧前缀的 key 下。从不压缩的会话不受影响——它们的 key 派生逐字节一致。
+
+插件还会发送同值的 `x-affinity` 头。该头**未公开且未经验证**：Mistral 的提示词缓存文档没有提到它，针对线上 API 的 A/B 测试也没有测出缓存命中差异（带头 7/8，不带头 8/8；唯一的未命中是第一次冷调用）。保留它是因为第三方证据表明它可能影响缓存路由，不认识它的服务器会忽略它，而移除它无法被证明是中性的——把它当作可能有帮助的提示，而不是请求会落到同一台服务器的保证。`cache.affinity` 与 `cache.reportUsage` 可单独关闭；关掉 `reportUsage` 就同时失去缓存命中数字。
+
+要确认实际发生了什么，`GET /plugins/dsh-mistral-pro/wire?limit=20` 现在会为每个请求返回一条 `usage` 记录，含 `promptTokens` 与 `cachedTokens`。前缀稳定但命中率接近 0%，通常意味着提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。
+
+`GET /plugins/dsh-mistral-pro/cache` 会把整份日志汇总为 `requests`、`promptTokens`、`cachedTokens` 和 `hitRate`，并附带最新 20 条 usage 记录。
 
 ## 设置项
 
 - **账号**：增删、排序、启停、写入 Key（保存并启用）、连通性测试。
 - **模型**：显示开关、上下文窗口、最大输出、默认思考强度。
-- **高级**：自动容灾、冷却、超时、目录刷新、输出上限、代理、按钮显示模式、刷新间隔，以及可选的 Cookie 兜底。
+- **高级**：自动容灾、冷却、超时、目录刷新、输出上限、提示词缓存 key、缓存亲和性、流式用量上报、传输方式、代理、按钮显示模式、刷新间隔，以及可选的 Cookie 兜底。
+  - **发送 x-affinity**（`cache.affinity`，默认开启）：把缓存 key 作为 `x-affinity` 发送；这是一个未公开、未经验证的缓存路由提示（见[提示词缓存](#提示词缓存)）。
+  - **上报流式用量**（`cache.reportUsage`，默认开启）：发送 `stream_options.include_usage`；关闭它也会隐藏 `cachedTokens` 计数。
+  - **传输方式**（`advanced.transport`，默认 `https`）：`https` 通过 `node:https` 发送已序列化的 body；`fetch` 走 `globalThis.fetch`，让进程内的包装层能看到并改写请求。
 
 ![Mistral Pro 设置页](docs/images/settings-zh.png)
 
@@ -140,19 +199,22 @@ Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/adv
 | `/plugins/dsh-mistral-pro/test?account=` | 用指定账号测试一次 `/v1/models` |
 | `/plugins/dsh-mistral-pro/refresh` | 立即刷新远端模型目录 |
 | `/plugins/dsh-mistral-pro/settings` | 设置命名空间与 revision |
-| `/plugins/dsh-mistral-pro/wire?limit=20` | 最近的 wire 指纹与逐条消息的键名布局 |
+| `/plugins/dsh-mistral-pro/wire?limit=20` | 最近的 wire 指纹、逐条消息的键名布局与缓存用量 |
+| `/plugins/dsh-mistral-pro/cache` | 聚合的提示词缓存命中率与最新 20 条 usage 记录 |
 
 ## 传输与 wire 日志
 
 聊天请求走 `node:https`，直接把适配器已经序列化好的 body 写进 socket，不经过 `globalThis.fetch`。
 
-代理类插件会替换 `globalThis.fetch`，在请求出站时重新序列化 body。billion-context 的 ACP 循环就是其中之一：只要模型 id 命中 `/deepseek/i`，它就给每条带 `tool_calls` 的 assistant 消息补上 `reasoning_content: ""`，而 `deepseek-v4-1-flash-1017` 正好命中。Mistral 不接受 assistant 消息上的这个字段，于是第一次工具调用之后的每一轮都变成 `422 extra_forbidden`。同进程里的插件无法替换 `node:https`，所以适配器构造出的字节就是真正出站的字节。
+代理类插件会替换 `globalThis.fetch`，在请求出站时重新序列化 body。billion-context 的 ACP 循环就是其中之一：只要模型 id 命中 `/deepseek/i`，它就给每条带工具调用的 assistant 消息补上 `reasoning_content: ""`，而 `deepseek-v4-1-flash-1017` 正好命中。Mistral 不接受 assistant 消息上的这个字段，于是第一次工具调用之后的每一轮都变成 `422 extra_forbidden`。同进程里的插件无法替换 `node:https`，所以适配器构造出的字节就是真正出站的字节。
 
-- 设 `advanced.transport: fetch`（或环境变量 `DSH_MISTRAL_TRANSPORT=fetch`）可退回 fetch 路径。只有在 billion-context 已经修好之后才该这么做：先跑 `node ~/.dsh/bili-strict-echo-doctor.mjs --check`，返回 0 表示它不再给 Mistral 请求补 `reasoning_content`；此时 fetch 路径既能让压缩等包装层重新生效，又不会重现 422。
+- 设 `DSH_MISTRAL_TRANSPORT=fetch` 可退回旧路径；只有在没有包装层改写请求体时才应使用。
 - 配置了 `advanced.proxy` 时仍走 fetch + undici `ProxyAgent`，因为那条路径需要 dispatcher。
-- 代价：走 `node:https` 时发出的流量不经过代理插件的压缩与改写。正确性优先；`dsh-our-free-model` 记录过同样的取舍（见其 issue #50）。
+- 代价：走 `node:https` 时发出的流量不经过代理插件的压缩与改写。正确性优先。
 
-每次请求都会向 `%TEMP%\dsh-mistral-wire.log` 追加一行（可用 `DSH_MISTRAL_WIRE_LOG` 改路径）：模型 id、消息条数、每条消息的 role 与键名、带 `reasoning_content` 的消息数，以及序列化 body 的 16 位 SHA-256。`/plugins/dsh-mistral-pro/wire?limit=20` 返回最新的若干条。日志保留 400 行，写日志失败不会影响请求。
+每次请求都会向 `%TEMP%\dsh-mistral-wire.log` 追加一行（可用 `DSH_MISTRAL_WIRE_LOG` 改路径）：模型 id、消息条数、每条消息的 role 与键名、带 `reasoning_content` 的消息数，以及序列化 body 的 16 位 SHA-256。第二条 `usage` 行记录 `promptTokens` 与 `cachedTokens`。日志保留 400 行，写日志失败不会影响请求。
+
+日志以 `0600` 权限创建：`%TEMP%` 通常是 `/tmp`（`1777`），而日志条目是提示词元数据。如果旧版本留下了全局可读的文件，下一次写入会把它收紧到 `0600`，轮转也会保持该权限。
 
 ## 数据与隐私
 
@@ -164,7 +226,7 @@ Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/adv
 ## 已知限制
 
 - `/v1/billing/budget` 与管理站点的额度接口都没有公开文档，插件按字段名读取；上游调整结构时部分窗口可能无法识别。
-- Mistral 公开 API 没有类似 `x-opencode-session` 的会话缓存路由头。
+- `prompt_cache_key` 只是提示而非保证：前缀稳定也可能在提供方缓存过期后未命中，少于 64 token 的提示词永远不会命中。
 - 容灾切换后的账号顺位只保留在内存中，进程重启后恢复为配置顺序。
 - 图片输入依赖 DSH 的 `attachments` 服务；缺失时会退化为文本占位符。
 - 代理功能要求宿主环境可解析 `undici`，否则请求会直接报错。
@@ -172,12 +234,25 @@ Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/adv
 ## 开发与测试
 
 ```sh
-node --test test/      # 20 个测试用例
-node --check index.js  # client.js 和 lib/*.js 同理
+npm test                  # 每个 test/*.mjs 套件，无网络、无 key
+npm run check             # 对每个随包发布的 JS 文件执行 node --check
+node test/tool-name.mjs   # 或直接运行单个套件
 ```
 
-测试通过本地 HTTP 服务模拟 Mistral SSE 流与管理后台接口，不发起外网请求，也不消耗额度。
+测试针对本地模拟 Mistral SSE 流的 mock HTTP 服务运行，不发起外部网络请求，也不需要 API Key。
+
+### 上游同步
+
+本 fork 通过 cherry-pick 具体修复来跟踪上游 [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-mistral-pro)，绝不合并上游 `main`，因为那会回退 0.2.x/0.3.0 的工作。先添加一次 remote，再查看有什么新内容：
+
+```sh
+git remote add upstream https://github.com/01NGVI-QINGYI/dsh-mistral-pro
+git fetch upstream --depth=50
+git log --oneline upstream/main
+```
+
+合并策略、版本策略以及如何在 `CHANGELOG.md` 中记录一次同步，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## License
 
-MIT · by 01NGVI-QINGYI
+MIT · 最初由 01NGVI-QINGYI 编写，fork 由 lordraiden 维护。

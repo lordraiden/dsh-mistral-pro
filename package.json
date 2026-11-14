@@ -1,6 +1,6 @@
 {
   "name": "dsh-mistral-pro",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Mistral subscription (Vibe Pro/Team) provider for DeepSeek Harness: multi-account failover, model catalog, subscription usage pill and settings page.",
   "icon": "icon.svg",
   "type": "module",
@@ -32,6 +32,7 @@
     "README.zh.md",
     "README.ja.md",
     "docs/images/*.png",
+    "CONTRIBUTING.md",
     "CHANGELOG.md"
   ],
   "dsh": {

@@ -4,6 +4,65 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.4.0
+
+Closes the twelve audit issues opened against 0.3.0. Default provider behaviour is unchanged; the release
+makes it tested, observable and documented, and adds the two cache behaviours the audit asked for.
+
+### CI and tests
+
+- **#1** — `npm test` runs every `test/*.mjs` suite through `test/run.mjs` and `npm run check` syntax-checks
+  every shipped JS file. `.github/workflows/ci.yml` runs both on Node 22 and 24 for every push and pull
+  request to `main`, installing the host-provided peer dependencies at an explicit version with `--no-save`.
+- **#2** — new suites: `transport` (the native path posts the exact serialized body), `failover` (a 401 fails
+  over before output; a mid-stream failure after a tool call does not), `stream-end` (a truncated stream
+  raises `TRANSPORT`, an empty one `EMPTY_RESPONSE`), `retry` (the resolved, flattened, JSON-safe policy) and
+  `shared-key` (the shared-key derivation and its stability).
+
+### Prompt cache
+
+- **#3** — `shared` falls back to the per-conversation `auto` derivation when the session has no
+  system/developer message, instead of degenerating to a model-only key every conversation would share.
+- **#4** — finding: DSH's `options.tools` order is canonical and stable for an unchanged tool set
+  (`dsh-system-prompt` sorts by name, or uses a fixed configured `toolOrder`; `dsh-session` compares tool
+  schemas in order). No code change.
+- **#5** — the derived cache key (`auto` and `shared`) rotates once per context compaction, folding in the
+  `compactionId` that DSH puts on the replacement user message (`source.kind === 'compact-checkpoint'`).
+  Sessions that never compact keep a byte-identical derivation.
+- **#6** — finding: `x-affinity` is undocumented and unverified. An A/B against the live API measured no
+  difference (7/8 cache hits with the header vs 8/8 without; the only miss was the first cold call); it is
+  kept as a possible routing hint, marked as unverified in the code, and the README no longer claims it pins
+  requests to a server.
+
+### Diagnostics and robustness
+
+- **#7** — `GET /plugins/dsh-mistral-pro/cache` aggregates the wire log into `requests`, `promptTokens`,
+  `cachedTokens` and `hitRate`, plus the 20 newest usage entries.
+- **#8** — the wire log is created `0600` and an existing wider file is tightened on the next write; rotation
+  keeps the mode.
+- **#9** — `response_error` in the finish chunk is inspected: the recorded success shapes stay silent, a
+  non-success shape is logged once, and an unusable tool call raises `MALFORMED_RESPONSE` (retryable) before
+  the call is dispatched.
+
+### UI and docs
+
+- **#10** — `README.zh.md` and `README.ja.md` are back at parity with the English README.
+- **#11** — `cache.affinity`, `cache.reportUsage` and `advanced.transport` are editable in
+  Settings → Mistral Pro → Advanced, with labels in en, zh and ja.
+- **#12** — `CONTRIBUTING.md` documents the upstream sync strategy (cherry-pick only, never merge upstream
+  `main`) and the independent version policy.
+
+### Upstream sync
+
+- Upstream: [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-mistral-pro) `0.1.2`
+  (`263a4f0`, a single commit, no tags).
+- Intermediate fork: [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro)
+  `0.2.0`–`0.2.4`.
+- Patch series: [upstream issue #1](https://github.com/01NGVI-QINGYI/dsh-mistral-pro/issues/1)
+  (`0.1.3`–`0.1.8`), applied by cherry-pick, never merged.
+- This fork's `0.x` is independent of upstream's `0.x`: upstream `0.1.3` sorts below this fork's `0.3.0`, so
+  version numbers are not comparable. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## 0.3.0
 
 Merge of the two independent fix lineages that existed on top of upstream `0.1.2`:

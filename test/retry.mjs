@@ -17,7 +17,9 @@ check('the policy is the normal retry mode', policy.mode === 'normal', String(po
 check('the policy keeps three retries', policy.maxRetries === 3, String(policy.maxRetries))
 check(
   'transient codes are retryable',
-  ['RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'EMPTY_RESPONSE'].every((code) => policy.retryableCodes.includes(code)),
+  ['RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'EMPTY_RESPONSE', 'MALFORMED_RESPONSE'].every((code) =>
+    policy.retryableCodes.includes(code),
+  ),
   JSON.stringify(policy.retryableCodes),
 )
 check('there is no nested backoff object', policy.backoff === undefined, JSON.stringify(policy.backoff))

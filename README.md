@@ -2,7 +2,7 @@
 
 Connects Mistral subscriptions (Vibe Pro / Team) to DeepSeek Harness. Provides the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a usage popover in the composer toolbar.
 
-![version](https://img.shields.io/badge/version-0.3.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.4.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -15,6 +15,32 @@ Connects Mistral subscriptions (Vibe Pro / Team) to DeepSeek Harness. Provides t
 > [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro) (0.2.0-0.2.4) and the
 > [upstream issue #1 patch series](https://github.com/01NGVI-QINGYI/dsh-mistral-pro/issues/1) (0.1.3-0.1.8).
 > See [CHANGELOG.md](CHANGELOG.md) for the full reconciliation.
+
+## What 0.4.0 changes
+
+0.4.0 closes the audit issues opened against 0.3.0. Provider behaviour is unchanged by default; the release
+makes the existing behaviour tested, observable and documented.
+
+- **CI and a real test entry point.** `npm test` discovers every `test/*.mjs` suite and `npm run check`
+  syntax-checks every shipped file; GitHub Actions runs both on Node 22 and 24 for every push and pull
+  request to `main`.
+- **New coverage** for the native transport (byte-exact request body), account failover (before output
+  only), truncated streams (`TRANSPORT`), the retry-policy shape, and both cache-key modes.
+- **`shared` no longer degenerates** to a model-only key when the session has no system message: it falls
+  back to the per-conversation `auto` derivation.
+- **The cache key rotates once per context compaction**, using the checkpoint DSH puts on the replacement
+  user message. Sessions that never compact keep exactly the same key.
+- **`response_error` in the finish chunk is inspected.** A validation failure is logged, and an unusable
+  tool call raises `MALFORMED_RESPONSE` instead of being dispatched; the retry policy re-runs the request.
+- **New `/cache` diagnostic route** aggregates the wire log into requests, prompt/cached tokens and a hit
+  rate.
+- **The wire log is created `0600`**, and an existing wider log is tightened on the next write.
+- **Settings UI**: `cache.affinity`, `cache.reportUsage` and `advanced.transport` are editable in
+  Settings → Mistral Pro → Advanced.
+- **Docs**: the Chinese and Japanese READMEs are back at parity, and `CONTRIBUTING.md` documents the
+  upstream sync strategy and the independent version policy.
+- **`x-affinity` is documented as what it is**: an undocumented, unverified cache-routing hint (see
+  [Prompt caching](#prompt-caching)).
 
 ## What 0.3.0 changes
 
@@ -37,10 +63,10 @@ Connects Mistral subscriptions (Vibe Pro / Team) to DeepSeek Harness. Provides t
 
 Requires DSH `>= 0.2.1-rc.5` and Node `^22.19.0 || >=24.0.0`.
 
-Install the fork pinned to a commit:
+Install the fork pinned to a release tag:
 
 ```sh
-dsh plugin --profile web add github:lordraiden/dsh-mistral-pro#8942e9ca453b19c65fd49178b7685c9d18f1b8a2
+dsh plugin --profile web add github:lordraiden/dsh-mistral-pro#v0.4.0
 ```
 
 Or add it to the profile's `package.json` and install:
@@ -48,7 +74,7 @@ Or add it to the profile's `package.json` and install:
 ```json
 {
   "dependencies": {
-    "dsh-mistral-pro": "github:lordraiden/dsh-mistral-pro#8942e9ca453b19c65fd49178b7685c9d18f1b8a2"
+    "dsh-mistral-pro": "github:lordraiden/dsh-mistral-pro#v0.4.0"
   }
 }
 ```
@@ -61,7 +87,7 @@ From a local checkout, pack a tarball (recommended) or link the directory:
 
 ```sh
 npm pack
-dsh plugin --profile web add /absolute/path/to/dsh-mistral-pro-0.3.0.tgz
+dsh plugin --profile web add /absolute/path/to/dsh-mistral-pro-0.4.0.tgz
 ```
 
 Linking a directory creates a symlink. Because pnpm does not resolve `peerDependencies` for symlinked
@@ -182,7 +208,7 @@ What the plugin does to keep the prefix stable:
 | Value | Key derivation | Best for |
 | --- | --- | --- |
 | `auto` (default) | model + system prompt + first user message | One long conversation: every appended turn keeps the same key. |
-| `shared` | model + system prompt only | Many short conversations that reuse the same (large) system prompt: the first turn of a new conversation can still hit the cached system-prompt prefix. |
+| `shared` | model + system prompt only; falls back to `auto` when the session has no system/developer message | Many short conversations that reuse the same (large) system prompt: the first turn of a new conversation can still hit the cached system-prompt prefix. |
 | `off` | field omitted | Providers or proxies that reject the field. |
 | any other string | sent as-is | Managing keys externally (one per workflow, team, or subscription). |
 
@@ -191,21 +217,45 @@ recommends ("use a stable application-level identifier, such as a conversation I
 isolation so separate conversations can reuse the system prompt. The provider still verifies prefix
 compatibility, so a shared key can only miss — it can never return another conversation's content.
 
-The plugin also sends an `x-affinity` header with the same value, so the turns of one conversation land on
-the same server. `cache.affinity` and `cache.reportUsage` can be turned off independently; turning off
-`reportUsage` also costs you the cache-hit numbers.
+With no leading system or developer message there is no shared prefix to reuse, so `shared` falls back to
+the per-conversation `auto` key instead of emitting a model-only key that every conversation on the model
+would share.
+
+A compaction rewrites the conversation prefix, so the derived key (`auto` and `shared`) rotates once per
+compaction: the newest `compactionId` from DSH's compaction checkpoint is mixed into the hash, giving the
+rewritten prefix a clean cache entry instead of filing it under a key that pointed at the old prefix.
+Sessions that never compact are unaffected — their key derivation is byte-identical.
+
+The plugin also sends an `x-affinity` header with the same value. The header is **undocumented and
+unverified**: Mistral's prompt-caching documentation does not mention it, and an A/B run against the live
+API measured no difference in cache hits (7/8 with the header vs 8/8 without; the only miss was the first,
+cold call). It is kept because third-party evidence suggests it can influence cache routing, servers that
+do not know it ignore it, and removing it cannot be shown neutral — treat it as a hint that may help, not a
+guarantee that requests land on the same server. `cache.affinity` and `cache.reportUsage` can be turned off
+independently; turning off `reportUsage` also costs you the cache-hit numbers.
 
 To see what actually happened, `GET /plugins/dsh-mistral-pro/wire?limit=20` now includes a `usage` entry per
 request with `promptTokens` and `cachedTokens`. A hit rate near 0% with a stable prefix usually means the
 prompt is under 64 tokens, the cache expired between turns, or something upstream is rewriting the first
 messages.
 
+`GET /plugins/dsh-mistral-pro/cache` sums the whole log into `requests`, `promptTokens`, `cachedTokens`
+and `hitRate`, plus the 20 newest usage entries.
+
 ## Settings
 
 - **Accounts**: add, remove, reorder, enable/disable, store a key (save & enable), test connectivity.
 - **Models**: toggle visibility, override context window, max output, and default reasoning effort.
 - **Advanced**: automatic failover, cooldown, timeouts, catalog refresh, output cap, prompt-cache key,
-  transport, proxy, button display mode, refresh interval, and an optional cookie fallback.
+  cache affinity, stream usage reporting, transport, proxy, button display mode, refresh interval, and an
+  optional cookie fallback.
+  - **Send x-affinity** (`cache.affinity`, on by default): sends the cache key as `x-affinity`; an
+    undocumented, unverified cache-routing hint (see [Prompt caching](#prompt-caching)).
+  - **Report stream usage** (`cache.reportUsage`, on by default): sends
+    `stream_options.include_usage`; turning it off also hides the `cachedTokens` counts.
+  - **Transport** (`advanced.transport`, default `https`): `https` posts the serialized body over
+    `node:https`; `fetch` routes through `globalThis.fetch` so in-process wrappers can see and rewrite
+    the request.
 
 ![Mistral Pro settings page](docs/images/settings-en.png)
 
@@ -225,6 +275,7 @@ Same-origin read-only routes registered for troubleshooting:
 | `/plugins/dsh-mistral-pro/refresh` | force a live model catalog refresh |
 | `/plugins/dsh-mistral-pro/settings` | settings namespace and revision |
 | `/plugins/dsh-mistral-pro/wire?limit=20` | newest wire fingerprints, per-message key layout, and cache usage |
+| `/plugins/dsh-mistral-pro/cache` | aggregate prompt-cache hit rate and the 20 newest usage entries |
 
 ## Transport and the wire log
 
@@ -247,6 +298,10 @@ Every request appends one line to `%TEMP%\dsh-mistral-wire.log` (override with `
 model id, message count, each message's role and keys, how many messages carry `reasoning_content`, and a
 16-hex SHA-256 of the serialized body. A second `usage` line records `promptTokens` and `cachedTokens`. The
 log is trimmed to 400 lines and a logging failure never interrupts a call.
+
+The log is created with mode `0600`: `%TEMP%` is usually `/tmp` (`1777`), and the entries are prompt
+metadata. If an older version left the file world-readable, the next write tightens it to `0600`, and
+rotation keeps that mode.
 
 ## Data & Privacy
 
@@ -271,13 +326,28 @@ log is trimmed to 400 lines and a logging failure never interrupts a call.
 ## Development
 
 ```sh
-node test/tool-name.mjs   # captured partner-model stream: the tool name survives
-node test/merged.mjs      # cache key, usage, output cap, retry policy, wire keys, attempt state
-node --check index.js     # same for client.js and lib/*.js
+npm test                  # every test/*.mjs suite, no network, no keys
+npm run check             # node --check over every shipped JS file
+node test/tool-name.mjs   # or run a single suite directly
 ```
 
 Tests run against a local mock HTTP server simulating Mistral SSE streams, with no external network calls
 and no API keys.
+
+### Upstream sync
+
+This fork tracks upstream [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-mistral-pro)
+by cherry-picking concrete fixes — never by merging upstream `main`, which would revert the 0.2.x/0.3.0 work.
+Add the remote once and inspect what is new:
+
+```sh
+git remote add upstream https://github.com/01NGVI-QINGYI/dsh-mistral-pro
+git fetch upstream --depth=50
+git log --oneline upstream/main
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the merge policy, the version policy and how to record a sync in
+`CHANGELOG.md`.
 
 ## License
 

@@ -79,6 +79,7 @@ window.__ModuleLoader__.load({
       displayOff: 'Hidden',
       refreshSeconds: 'Refresh interval (seconds)',
       showCredits: 'Show credit balance',
+      showCache: 'Show prompt-cache hit rate',
       noCookie: 'Add an admin cookie to show subscription usage.',
       monthly: 'Included monthly usage',
       credits: 'Credits',
@@ -121,6 +122,13 @@ window.__ModuleLoader__.load({
       panelCookieBody: 'The billing endpoints refused this key; it may lack the usage permission. An admin-site cookie can read the same numbers.',
       panelCookieSteps: 'Sign in to admin.mistral.ai, copy the Cookie header from any request, and paste it under Settings → Mistral Pro → Advanced.',
       panelOpenAdmin: 'Open Mistral Admin',
+      cacheTitle: 'Prompt cache',
+      cacheSummary: '{rate} hit rate · {count} requests',
+      cacheTokens: '{cached} / {total} prompt tokens cached',
+      cacheLast: 'Last request: {rate} · {model}',
+      cacheEmpty: 'No cached requests recorded yet.',
+      cacheUnavailable: 'Cache statistics are unavailable.',
+      cacheRefresh: 'Refresh cache',
       windowVibe: 'Vibe budget',
       windowApi: 'API budget',
       windowBudget: 'Monthly budget',
@@ -187,6 +195,7 @@ window.__ModuleLoader__.load({
       displayOff: '隐藏',
       refreshSeconds: '刷新间隔（秒）',
       showCredits: '显示余额',
+      showCache: '显示 Prompt 缓存命中率',
       noCookie: '配置管理站点 Cookie 后可显示订阅额度。',
       monthly: '月度包含额度',
       credits: '余额',
@@ -229,6 +238,13 @@ window.__ModuleLoader__.load({
       panelCookieBody: '账单接口拒绝了这个 Key，可能是缺少 usage 权限。也可以用管理站点 Cookie 读取同样的数据。',
       panelCookieSteps: '登录 admin.mistral.ai，从任意请求复制 Cookie 头，粘贴到 设置 → Mistral Pro → 高级设置。',
       panelOpenAdmin: '打开 Mistral Admin',
+      cacheTitle: 'Prompt 缓存',
+      cacheSummary: '命中率 {rate} · {count} 次请求',
+      cacheTokens: '{cached} / {total} 个 prompt token 命中缓存',
+      cacheLast: '最近一次：{rate} · {model}',
+      cacheEmpty: '还没有记录到缓存请求。',
+      cacheUnavailable: '缓存统计不可用。',
+      cacheRefresh: '刷新缓存',
       windowVibe: 'Vibe 额度',
       windowApi: 'API 额度',
       windowBudget: '月度预算',
@@ -290,6 +306,7 @@ window.__ModuleLoader__.load({
       displayOff: '非表示',
       refreshSeconds: '更新間隔（秒）',
       showCredits: '残高を表示',
+      showCache: 'プロンプトキャッシュのヒット率を表示',
       noCookie: '管理サイトの Cookie を設定すると使用量を表示できます。',
       monthly: '月次の使用枠',
       credits: '残高',
@@ -338,6 +355,13 @@ window.__ModuleLoader__.load({
       panelCookieBody: '請求エンドポイントがこのキーを拒否しました。usage 権限がない可能性があります。管理サイトの Cookie でも同じ数値を取得できます。',
       panelCookieSteps: 'admin.mistral.ai にログインし、任意のリクエストから Cookie ヘッダーをコピーして Settings → Mistral Pro → Advanced に貼り付けてください。',
       panelOpenAdmin: 'Mistral Admin を開く',
+      cacheTitle: 'プロンプトキャッシュ',
+      cacheSummary: 'ヒット率 {rate} · {count} リクエスト',
+      cacheTokens: 'プロンプト {cached} / {total} トークンがキャッシュ済み',
+      cacheLast: '直近のリクエスト: {rate} · {model}',
+      cacheEmpty: 'キャッシュされたリクエストはまだありません。',
+      cacheUnavailable: 'キャッシュ統計を取得できません。',
+      cacheRefresh: 'キャッシュを更新',
       windowVibe: 'Vibe 使用枠',
       windowApi: 'API 使用枠',
       windowBudget: '月次予算',
@@ -439,6 +463,16 @@ window.__ModuleLoader__.load({
       return minutes <= 0 ? t('timeNow') : fill(t('timeMinutesAgo'), { n: minutes })
     }
 
+    function ratePercent(rate) {
+      if (typeof rate !== 'number' || !Number.isFinite(rate)) return '—'
+      return `${Math.round(rate * 100)}%`
+    }
+
+    function formatCount(value) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+      return Math.round(value).toLocaleString()
+    }
+
     function Field({ label, hint, children }) {
       return h('div', { style: { marginBottom: 10 } }, h('span', { style: S.label }, label), children, hint ? h('p', { style: S.hint }, hint) : null)
     }
@@ -500,6 +534,7 @@ window.__ModuleLoader__.load({
               refreshSeconds: value.usage?.refreshSeconds ?? meta.usage.refreshSeconds ?? 60,
               adminCookieEnv: value.usage?.adminCookieEnv ?? meta.usage.adminCookieEnv ?? 'MISTRAL_ADMIN_COOKIE',
               showCredits: value.usage?.showCredits !== false,
+              showCache: value.usage?.showCache !== false,
             },
             advanced: { ...meta.advanced, ...(value.advanced ?? {}) },
             cache: {
@@ -882,6 +917,11 @@ window.__ModuleLoader__.load({
               checked: draft.cache.reportUsage !== false,
               onChange: (event) => setCache({ reportUsage: event.target.checked }),
             })),
+            h(Field, { label: t('showCache') }, h('input', {
+              type: 'checkbox',
+              checked: draft.usage.showCache !== false,
+              onChange: (event) => setUsage({ showCache: event.target.checked }),
+            })),
             h(Field, { label: t('transport'), hint: t('transportHint') },
               h('select', {
                 style: S.input,
@@ -1104,15 +1144,29 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState(null)
       const [meta, setMeta] = useState(null)
       const [busy, setBusy] = useState(false)
+      const [cache, setCache] = useState(null)
+      const [cacheError, setCacheError] = useState(null)
+      const [cacheBusy, setCacheBusy] = useState(false)
+      const [showCache, setShowCache] = useState(null)
 
       useEffect(() => {
         if (!open) return undefined
         let cancelled = false
         void getJSON('/meta')
-          .then((value) => {
-            if (!cancelled) setMeta(value)
+          .then(async (value) => {
+            if (cancelled) return
+            setMeta(value)
+            try {
+              const described = await callRemote(ctx, 'settings', 'describe')
+              const view = described.namespaces.find((entry) => entry.ns === value.settingsNs)
+              if (!cancelled) setShowCache(view?.value?.usage?.showCache !== false)
+            } catch {
+              if (!cancelled) setShowCache(true)
+            }
           })
-          .catch(() => {})
+          .catch(() => {
+            if (!cancelled) setShowCache(true)
+          })
         void getJSON('/usage?force=1')
           .then((value) => {
             if (!cancelled) {
@@ -1131,7 +1185,28 @@ window.__ModuleLoader__.load({
           cancelled = true
           window.removeEventListener('keydown', onKey)
         }
-      }, [open])
+      }, [open, ctx])
+
+      useEffect(() => {
+        if (!open || showCache !== true) return undefined
+        let cancelled = false
+        void getJSON('/cache')
+          .then((value) => {
+            if (!cancelled) {
+              setCache(value)
+              setCacheError(null)
+            }
+          })
+          .catch((caught) => {
+            if (!cancelled) {
+              setCache(null)
+              setCacheError(String(caught?.message ?? caught))
+            }
+          })
+        return () => {
+          cancelled = true
+        }
+      }, [open, showCache])
 
       if (!open) return null
 
@@ -1147,8 +1222,52 @@ window.__ModuleLoader__.load({
         }
       }
 
+      const refreshCache = async () => {
+        setCacheBusy(true)
+        try {
+          setCache(await getJSON('/cache'))
+          setCacheError(null)
+        } catch (caught) {
+          setCache(null)
+          setCacheError(String(caught?.message ?? caught))
+        } finally {
+          setCacheBusy(false)
+        }
+      }
+
       const windows = usage?.windows ?? []
       const configured = meta?.accounts?.some((account) => account.configured === true) === true
+      const recent = Array.isArray(cache?.recent) ? cache.recent : []
+      const lastRequest = recent.length === 0 ? undefined : recent[recent.length - 1]
+      const lastRate = lastRequest !== undefined && lastRequest.promptTokens > 0 ? lastRequest.cachedTokens / lastRequest.promptTokens : 0
+      const cacheUnavailable = cacheError !== null || (cache !== null && cache.ok === false)
+      const cacheContent = cacheUnavailable
+        ? h('p', { style: S.hint }, t('cacheUnavailable'))
+        : cache === null
+          ? h('p', { style: S.hint }, t('loading'))
+          : cache.requests === 0
+            ? h('p', { style: S.hint }, t('cacheEmpty'))
+            : h(
+                'div',
+                null,
+                h(
+                  'p',
+                  { style: { ...S.hint, margin: '4px 0 0' } },
+                  fill(t('cacheSummary'), { rate: ratePercent(cache.hitRate), count: formatCount(cache.requests) }),
+                ),
+                h(
+                  'p',
+                  { style: { ...S.hint, margin: '2px 0 0' } },
+                  fill(t('cacheTokens'), { cached: formatCount(cache.cachedTokens), total: formatCount(cache.promptTokens) }),
+                ),
+                lastRequest === undefined
+                  ? null
+                  : h(
+                      'p',
+                      { style: { ...S.hint, margin: '2px 0 0' } },
+                      fill(t('cacheLast'), { rate: ratePercent(lastRate), model: lastRequest.model ?? '—' }),
+                    ),
+              )
 
       return h(
         'div',
@@ -1264,6 +1383,20 @@ window.__ModuleLoader__.load({
             : null,
           usage?.spend
             ? h('p', { style: S.hint }, `${t('spend')}: ${money(usage.spend.amount, usage.spend.currency)}`)
+            : null,
+
+          showCache === true
+            ? h(
+                'div',
+                { style: { marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)' } },
+                h(
+                  'div',
+                  { style: { ...S.row, justifyContent: 'space-between' } },
+                  h('span', { style: { ...S.title, fontSize: 13 } }, t('cacheTitle')),
+                  h('button', { style: S.button, disabled: cacheBusy, onClick: () => void refreshCache() }, t('cacheRefresh')),
+                ),
+                cacheContent,
+              )
             : null,
 
           h(

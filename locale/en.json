@@ -72,6 +72,15 @@
     "updated": "Updated {when}",
     "refresh": "Refresh"
   },
+  "cache": {
+    "title": "Prompt cache",
+    "summary": "{rate} hit rate · {count} requests",
+    "tokens": "{cached} / {total} prompt tokens cached",
+    "last": "Last request: {rate} · {model}",
+    "empty": "No cached requests recorded yet.",
+    "unavailable": "Cache statistics are unavailable.",
+    "refresh": "Refresh cache"
+  },
   "advanced": {
     "title": "Advanced",
     "baseURL": "Default base URL",
@@ -85,6 +94,7 @@
     "cacheAffinity": "Send x-affinity (undocumented cache-routing hint)",
     "cacheReportUsage": "Report stream usage (cached tokens)",
     "cacheReportUsageHint": "Turning this off also hides cached-token counts.",
+    "showCache": "Show prompt-cache hit rate",
     "transport": "Transport",
     "transportHint": "https posts the serialized body over node:https (default, correct); fetch lets in-process wrappers see and rewrite the request.",
     "proxy": "Proxy URL (http/https/socks5)",

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The package declares `^22.19.0 || >=24.0.0`; test both supported lines.
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # The DSH packages are host-provided peer dependencies, never runtime
+      # dependencies of this package. `--no-save` keeps package.json clean; the
+      # explicit version is required because the published `latest` dist-tag of
+      # these packages is stale (0.0.1-rc.1).
+      - name: Install host-provided peer dependencies
+        run: >
+          npm install --no-save --no-package-lock --no-audit --no-fund
+          @deepseek-ai/dsh-llm@0.2.2-rc.3
+          @deepseek-ai/dsh-launch-environment@0.2.2-rc.3
+          @deepseek-ai/schemastery@3.19.0
+
+      - name: Syntax check
+        run: npm run check
+
+      - name: Regression suites
+        run: npm test

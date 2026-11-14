@@ -14,6 +14,21 @@ DeepSeek Harness で Mistral のサブスクリプション（Vibe Pro / Team）
 
 > 英語版 [README.md](README.md) が正式版です。本翻訳より新しい場合があります。
 
+## 0.4.0 での変更
+
+0.4.0 は 0.3.0 に対して起票された監査 issue を解消します。プロバイダーの挙動は既定では変わらず、今回のリリースは既存の挙動をテスト可能・観測可能・文書化されたものにします。
+
+- **CI と本物のテストエントリポイント。** `npm test` はすべての `test/*.mjs` スイートを検出し、`npm run check` は同梱されるすべてのファイルを構文チェックします。GitHub Actions は `main` へのプッシュと `main` 向けの pull request ごとに、Node 22 と 24 の両方でこれを実行します。
+- **新しいカバレッジ**: ネイティブトランスポート（リクエストボディのバイト一致）、アカウントのフェイルオーバー（出力前のみ）、途中で切れたストリーム（`TRANSPORT`）、リトライポリシーの形、2 つのキャッシュキーモード。
+- **`shared` が退化しなくなりました**: セッションにシステムメッセージがない場合にモデルのみのキーになるのではなく、会話ごとの `auto` 導出にフォールバックします。
+- **キャッシュキーはコンテキスト圧縮ごとに 1 回ローテーションします**。DSH が置換ユーザーメッセージに付けるチェックポイントを使います。圧縮しないセッションはまったく同じキーを保ちます。
+- **終了チャンクの `response_error` を検査します。** 検証失敗はログに記録され、使用できないツール呼び出しはディスパッチされずに `MALFORMED_RESPONSE` を送出します。リトライポリシーがリクエストを再実行します。
+- **新しい `/cache` 診断ルート**が wire ログをリクエスト数、prompt / キャッシュトークン、ヒット率に集計します。
+- **wire ログは `0600` で作成**され、既存のより緩いログは次の書き込みで引き締められます。
+- **設定 UI**: `cache.affinity`、`cache.reportUsage`、`advanced.transport` を Settings → Mistral Pro → Advanced で編集できます。
+- **ドキュメント**: 中国語と日本語の README がパリティに戻り、`CONTRIBUTING.md` が上流同期の戦略と独立したバージョンポリシーを文書化しています。
+- **`x-affinity` をあるがままに文書化**: 未公開で未検証のキャッシュルーティングヒントです（[プロンプトキャッシュ](#プロンプトキャッシュ)を参照）。
+
 ## 0.3.0 での変更
 
 - **ツール呼び出しが `unknown tool ""` として届かなくなりました。** Mistral はストリーミングのツール呼び出しで、継続チャンクごとに `function.name: ""` を繰り返します。アキュムレータは空でない名前だけを受け取り、最初に見た名前を保持するようになりました。
@@ -29,10 +44,10 @@ DeepSeek Harness で Mistral のサブスクリプション（Vibe Pro / Team）
 
 動作環境: DSH `>= 0.2.1-rc.5`、Node `^22.19.0 || >=24.0.0`
 
-コミットに固定したフォークをインストールします:
+リリースタグに固定したフォークをインストールします:
 
 ```sh
-dsh plugin --profile web add github:lordraiden/dsh-mistral-pro#8942e9ca453b19c65fd49178b7685c9d18f1b8a2
+dsh plugin --profile web add github:lordraiden/dsh-mistral-pro#v0.4.0
 ```
 
 または profile の `package.json` に追加してからインストールします:
@@ -40,7 +55,7 @@ dsh plugin --profile web add github:lordraiden/dsh-mistral-pro#8942e9ca453b19c65
 ```json
 {
   "dependencies": {
-    "dsh-mistral-pro": "github:lordraiden/dsh-mistral-pro#8942e9ca453b19c65fd49178b7685c9d18f1b8a2"
+    "dsh-mistral-pro": "github:lordraiden/dsh-mistral-pro#v0.4.0"
   }
 }
 ```
@@ -142,21 +157,30 @@ Mistral の[プロンプトキャッシュ](https://docs.mistral.ai/inference/co
 | 値 | キーの導出 | 適した用途 |
 | --- | --- | --- |
 | `auto`（既定） | モデル + システムプロンプト + 最初のユーザーメッセージ | 1 つの長い会話: ターンを追記しても同じキーを保ちます。 |
-| `shared` | モデル + システムプロンプトのみ | 同じ（大きな）システムプロンプトを再利用する多数の短い会話: 新しい会話の最初のターンでも、キャッシュ済みのシステムプロンプトのプレフィックスにヒットできます。 |
+| `shared` | モデル + システムプロンプトのみ。セッションにシステム/開発者メッセージがない場合は `auto` にフォールバック | 同じ（大きな）システムプロンプトを再利用する多数の短い会話: 新しい会話の最初のターンでも、キャッシュ済みのシステムプロンプトのプレフィックスにヒットできます。 |
 | `off` | フィールドを送信しない | このフィールドを拒否するプロバイダーやプロキシ。 |
 | その他の文字列 | そのまま送信 | キーを外部で管理する場合（ワークフロー、チーム、サブスクリプションごとなど）。 |
 
 `auto` と `shared` は優劣ではなくトレードオフです。`auto` は会話を分離し、Mistral の推奨（「会話 ID のような安定したアプリケーションレベルの識別子を使う」）に沿います。`shared` はその分離を犠牲にして、別々の会話がシステムプロンプトを再利用できるようにします。プロバイダーはプレフィックスの互換性を検証するため、共有キーはミスするだけで、他の会話の内容を返すことはありません。
 
-プラグインは同じ値を `x-affinity` ヘッダーとしても送信し、1 つの会話のターンが同じサーバーに届くようにします。`cache.affinity` と `cache.reportUsage` は個別に無効化できます。`reportUsage` を無効にすると、キャッシュヒットの数値も失います。
+先頭にシステムメッセージも開発者メッセージもない場合、再利用できる共有プレフィックスが存在しないため、`shared` はモデル上のすべての会話が共有するモデルのみのキーを送る代わりに、会話ごとの `auto` キーにフォールバックします。
+
+圧縮は会話のプレフィックスを書き換えるため、導出キー（`auto` と `shared`）は圧縮ごとに 1 回ローテーションします。DSH の圧縮チェックポイントにある最新の `compactionId` をハッシュに混ぜることで、書き換え後のプレフィックスは古いプレフィックスを指していたキーではなく、きれいなキャッシュエントリに収まります。圧縮しないセッションは影響を受けず、キーの導出はバイト単位で同一です。
+
+プラグインは同じ値を `x-affinity` ヘッダーとしても送信します。このヘッダーは**未公開かつ未検証**です。Mistral のプロンプトキャッシュのドキュメントには記載がなく、ライブ API に対する A/B 実行でもキャッシュヒットに差は測れませんでした（ヘッダーありで 7/8、なしで 8/8。唯一のミスは最初のコールドコール）。残しているのは、サードパーティの証拠がキャッシュルーティングに影響しうることを示唆していること、このヘッダーを知らないサーバーは無視すること、そして削除しても中立であることを示せないことによります。リクエストが同じサーバーに届く保証ではなく、役立つ可能性のあるヒントとして扱ってください。`cache.affinity` と `cache.reportUsage` は個別に無効化できます。`reportUsage` を無効にすると、キャッシュヒットの数値も失います。
 
 実際に何が起きたかを確認するには、`GET /plugins/dsh-mistral-pro/wire?limit=20` を使います。各リクエストの `usage` エントリに `promptTokens` と `cachedTokens` が含まれます。プレフィックスが安定しているのにヒット率がほぼ 0% の場合、プロンプトが 64 トークン未満であるか、ターン間でキャッシュが期限切れになったか、上流で最初のメッセージが書き換えられているかのいずれかです。
+
+`GET /plugins/dsh-mistral-pro/cache` はログ全体を `requests`、`promptTokens`、`cachedTokens`、`hitRate` に集計し、最新 20 件の usage エントリも返します。
 
 ## 設定項目
 
 - **Accounts**: アカウントの追加・削除、並び替え、有効/無効、API キーの保存（保存して有効化）、疎通テスト
 - **Models**: 表示切り替え、コンテキスト長、最大出力トークン数、既定の推論強度
-- **Advanced**: 自動フェイルオーバー、クールダウン、タイムアウト、カタログ更新、出力上限、プロンプトキャッシュキー、トランスポート、プロキシ、ボタンの表示モード、更新間隔、任意の Cookie フォールバック
+- **Advanced**: 自動フェイルオーバー、クールダウン、タイムアウト、カタログ更新、出力上限、プロンプトキャッシュキー、キャッシュアフィニティ、ストリーム使用量の報告、トランスポート、プロキシ、ボタンの表示モード、更新間隔、任意の Cookie フォールバック
+  - **x-affinity を送信**（`cache.affinity`、既定でオン）: キャッシュキーを `x-affinity` として送信します。未公開で未検証のキャッシュルーティングヒントです（[プロンプトキャッシュ](#プロンプトキャッシュ)を参照）。
+  - **ストリーム使用量を報告**（`cache.reportUsage`、既定でオン）: `stream_options.include_usage` を送信します。オフにすると `cachedTokens` の数値も表示されなくなります。
+  - **トランスポート**（`advanced.transport`、既定値 `https`）: `https` はシリアライズ済みのボディを `node:https` で送信します。`fetch` は `globalThis.fetch` を経由するため、プロセス内のラッパーがリクエストを確認・書き換えできます。
 
 ![Mistral Pro 設定画面](docs/images/settings-ja.png)
 
@@ -176,6 +200,7 @@ Mistral の[プロンプトキャッシュ](https://docs.mistral.ai/inference/co
 | `/plugins/dsh-mistral-pro/refresh` | モデルカタログの即時更新 |
 | `/plugins/dsh-mistral-pro/settings` | 設定の名前空間と revision |
 | `/plugins/dsh-mistral-pro/wire?limit=20` | 最新の wire フィンガープリント、メッセージごとのキー構成、キャッシュ使用量 |
+| `/plugins/dsh-mistral-pro/cache` | プロンプトキャッシュの集計ヒット率と最新 20 件の usage エントリ |
 
 ## トランスポートと wire ログ
 
@@ -188,6 +213,8 @@ Mistral の[プロンプトキャッシュ](https://docs.mistral.ai/inference/co
 - トレードオフ: この経路で送った通信は、プロキシ系プラグインの圧縮や書き換えを通りません。正確さを優先します。
 
 リクエストごとに `%TEMP%\dsh-mistral-wire.log` へ 1 行追記します（`DSH_MISTRAL_WIRE_LOG` で変更可能）: モデル ID、メッセージ数、各メッセージの role とキー、`reasoning_content` を持つメッセージ数、シリアライズしたボディの 16 桁の SHA-256 です。2 行目の `usage` 行には `promptTokens` と `cachedTokens` が記録されます。ログは 400 行に切り詰められ、ログ出力の失敗がリクエストを中断することはありません。
+
+ログはモード `0600` で作成されます。`%TEMP%` は通常 `/tmp`（`1777`）で、ログの内容はプロンプトのメタデータです。古いバージョンがファイルを誰でも読める状態で残していた場合、次の書き込みで `0600` に引き締められ、ローテーションでもそのモードが保たれます。
 
 ## データとプライバシー
 
@@ -208,12 +235,24 @@ Mistral の[プロンプトキャッシュ](https://docs.mistral.ai/inference/co
 ## 開発・テスト
 
 ```sh
-node test/tool-name.mjs   # 取得済みのパートナーモデルのストリーム: ツール名が保持される
-node test/merged.mjs      # キャッシュキー、使用量、出力上限、リトライポリシー、wire キー、試行状態
-node --check index.js     # client.js と lib/*.js も同様
+npm test                  # すべての test/*.mjs スイート、ネットワークもキーも不要
+npm run check             # 同梱されるすべての JS ファイルに node --check
+node test/tool-name.mjs   # 単一のスイートだけを直接実行する場合
 ```
 
 テストは Mistral の SSE ストリームを模したローカルのモック HTTP サーバーに対して実行され、外部ネットワーク通信も API キーも不要です。
+
+### アップストリーム同期
+
+このフォークは、上流 [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-mistral-pro) を具体的な修正の cherry-pick で追従します。上流の `main` をそのままマージすることはありません（0.2.x/0.3.0 の作業が巻き戻るため）。リモートを一度追加し、何が新しいかを確認します:
+
+```sh
+git remote add upstream https://github.com/01NGVI-QINGYI/dsh-mistral-pro
+git fetch upstream --depth=50
+git log --oneline upstream/main
+```
+
+マージポリシー、バージョンポリシー、`CHANGELOG.md` への同期の記録方法は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
 
 ## License
 

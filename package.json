@@ -25,9 +25,10 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
+    "README.zh.md",
     "README.ja.md",
-    "README.en.md",
-    "docs/images/*.png"
+    "docs/images/*.png",
+    "CHANGELOG.md"
   ],
   "dsh": {
     "bundle": {

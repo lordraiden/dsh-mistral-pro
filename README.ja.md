@@ -2,9 +2,11 @@
 
 DeepSeek Harness で Mistral のサブスクリプション（Vibe Pro / Team）を利用するためのプラグインです。`mistral-pro` モデルルートの追加、複数アカウントのフェイルオーバー、入力欄ツールバーからの使用量確認に対応しています。
 
-![version](https://img.shields.io/badge/version-0.1.2-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.3.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
-[中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
+[English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
+
+> 英語版 [README.md](README.md) が正式版です。本翻訳より新しい場合があります。
 
 ---
 

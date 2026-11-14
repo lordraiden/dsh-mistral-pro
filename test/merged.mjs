@@ -33,6 +33,15 @@ check('off omits prompt_cache_key', build({ ...baseConfig, advanced: { ...baseCo
 check('custom key passes through', build({ ...baseConfig, advanced: { ...baseConfig.advanced, promptCacheKey: 'team-shard-1' } }).prompt_cache_key === 'team-shard-1')
 check('different conversation shards apart', build(baseConfig, [{ role: 'user', content: 'unrelated' }]).prompt_cache_key !== body.prompt_cache_key)
 
+// --- 'shared' mode: reuse the system-prompt prefix across conversations ---
+const sharedConfig = { ...baseConfig, advanced: { ...baseConfig.advanced, promptCacheKey: 'shared' } }
+const sharedA = build(sharedConfig, messages)
+const sharedB = build(sharedConfig, [{ role: 'system', content: 'you are a coding agent' }, { role: 'user', content: 'a different question' }])
+check('shared key ignores the first user message', sharedA.prompt_cache_key === sharedB.prompt_cache_key)
+check('shared key changes with the system prompt', build(sharedConfig, [{ role: 'system', content: 'different system' }, { role: 'user', content: 'x' }]).prompt_cache_key !== sharedA.prompt_cache_key)
+check('shared key changes with the model', build(sharedConfig, messages, { model: 'mistral-large-4' }).prompt_cache_key !== sharedA.prompt_cache_key)
+check('shared key is a 64-char digest', typeof sharedA.prompt_cache_key === 'string' && sharedA.prompt_cache_key.length === 64)
+
 // --- fork: usage reporting ---
 check('stream_options.include_usage requested', body.stream_options?.include_usage === true)
 check('reportUsage=false omits stream_options', build({ ...baseConfig, cache: { ...baseConfig.cache, reportUsage: false } }).stream_options === undefined)

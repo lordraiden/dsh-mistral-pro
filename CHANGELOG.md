@@ -18,10 +18,18 @@ Merge of the two independent fix lineages that existed on top of upstream `0.1.2
 
 Reconciliation decisions:
 
-- **One cache knob.** `advanced.promptCacheKey` (`'auto'` | `'off'` | custom string, default `'auto'`)
-  is the single setting, because it is the one the settings page exposes. The fork's
+- **One cache knob.** `advanced.promptCacheKey` (`'auto'` | `'shared'` | `'off'` | custom string,
+  default `'auto'`) is the single setting, because it is the one the settings page exposes. The fork's
   `cache.promptCacheKey` and `lib/cache.js` were removed; `cache.affinity` and `cache.reportUsage`
   stay (config-only, no UI).
+- **New `'shared'` cache-key mode.** `'auto'` derives a per-conversation key (model + system prompt +
+  first user message), so a new conversation can never reuse the system-prompt prefix. `'shared'`
+  derives the key from the model and the leading system prompt only, so separate conversations on the
+  same model and system prompt share a cache namespace and the first turn of a new conversation can
+  still hit the cached system-prompt prefix. The provider verifies prefix compatibility, so a shared
+  key can only miss, never return another conversation's content.
+- **Cache observability.** `/plugins/dsh-mistral-pro/wire` now records a `usage` entry per request with
+  `promptTokens` and `cachedTokens`, so a hit rate can be measured without reading the session log.
 - **`advanced.maxTokensCap` default is `0`** (no cap), from the upstream series. Reasoning shares the
   completion budget, so a cap that looks generous for text can be consumed by thinking alone.
 - **Tool-call accumulation** uses the upstream first-wins rule (`id`/`name` only update when

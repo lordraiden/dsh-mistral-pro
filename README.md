@@ -1,56 +1,104 @@
 ### dsh-mistral-pro
 
-在 DeepSeek Harness 中接入 Mistral 订阅（Vibe Pro / Team），提供 `mistral-pro` 模型路由、多账号故障切换和输入框工具栏的额度面板。
+Connects Mistral subscriptions (Vibe Pro / Team) to DeepSeek Harness. Provides the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a usage popover in the composer toolbar.
 
-![version](https://img.shields.io/badge/version-0.1.2-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.3.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
-[中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
+[English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
 ---
 
-![Mistral Pro 额度面板](docs/images/usage-zh.png)
+![Mistral Pro usage panel](docs/images/usage-en.png)
 
-## 安装
+> **This is a fork.** [`lordraiden/dsh-mistral-pro`](https://github.com/lordraiden/dsh-mistral-pro) merges the two
+> independent fix lineages that existed on top of upstream `0.1.2`:
+> [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro) (0.2.0-0.2.4) and the
+> [upstream issue #1 patch series](https://github.com/01NGVI-QINGYI/dsh-mistral-pro/issues/1) (0.1.3-0.1.8).
+> See [CHANGELOG.md](CHANGELOG.md) for the full reconciliation.
 
-环境要求：DSH `>= 0.2.1-rc.5`，Node `^22.19.0 || >=24.0.0`。
+## What 0.3.0 changes
 
-推荐打包成 tarball 安装：
+- **Tool calls no longer arrive as `unknown tool ""`.** Mistral repeats `function.name: ""` on every
+  continuation chunk of a streamed tool call; the accumulator now only accepts a non-empty name and keeps
+  the first one it saw.
+- **One `block-start` per block**, so the live thinking panel no longer collapses while streaming.
+- **`id` is always a string on `tool-call-delta`**, which the harness stream contract requires.
+- **Retry policy is the resolved, flattened shape**, so the first transient failure no longer dies with
+  `session event "llm/retry" carries non-JSON-serializable data`.
+- **A truncated stream raises `TRANSPORT`** instead of ending the turn "successfully" with partial output.
+- **No injected `max_tokens` cap** (`advanced.maxTokensCap` defaults to `0`). Reasoning shares the
+  completion budget, so a cap that looks generous for text can be consumed by thinking alone.
+- **Attempt state is committed on tool calls.** A mid-stream failure after a tool call can no longer
+  trigger account failover and splice two accounts' output into one turn.
+- **Prompt-cache tuning**: `advanced.promptCacheKey` now supports `auto`, `shared`, `off`, or a custom
+  string, and `/wire` records the `cached_tokens` each request actually returned.
+
+## Installation
+
+Requires DSH `>= 0.2.1-rc.5` and Node `^22.19.0 || >=24.0.0`.
+
+Install the fork pinned to a commit:
+
+```sh
+dsh plugin --profile web add github:lordraiden/dsh-mistral-pro#8942e9ca453b19c65fd49178b7685c9d18f1b8a2
+```
+
+Or add it to the profile's `package.json` and install:
+
+```json
+{
+  "dependencies": {
+    "dsh-mistral-pro": "github:lordraiden/dsh-mistral-pro#8942e9ca453b19c65fd49178b7685c9d18f1b8a2"
+  }
+}
+```
+
+```sh
+pnpm install
+```
+
+From a local checkout, pack a tarball (recommended) or link the directory:
 
 ```sh
 npm pack
-dsh plugin --profile desktop add /absolute/path/to/dsh-mistral-pro-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/dsh-mistral-pro-0.3.0.tgz
 ```
 
-本地开发也可以直接挂载目录：
+Linking a directory creates a symlink. Because pnpm does not resolve `peerDependencies` for symlinked
+targets, the repo includes a `node_modules/@deepseek-ai/*` symlink directory pointing to the active
+profile's shared dependencies (excluded when packing the tarball).
 
-```sh
-dsh plugin --profile desktop add /absolute/path/to/dsh-mistral-pro
-```
+Once installed, enable `dsh-mistral-pro` on the **Plugins** page and reload. A host restart is required
+after changing the installed version.
 
-按目录添加会创建符号链接。由于 pnpm 不会为符号链接解析 `peerDependencies`，仓库内预置了指向当前 profile 共享依赖的 `node_modules/@deepseek-ai/*` 软链（打包 tarball 时不会包含）。
+## Adding Accounts
 
-安装后到 **插件** 页面启用 `dsh-mistral-pro`，刷新页面即可。
+Open **Settings → Mistral Pro → Accounts**:
 
-## 添加账号
+1. Click **Add account** and enter a display name (used only for display and ordering).
+2. Set **Credential reference** to an environment variable name, such as `MISTRAL_API_KEY`.
+3. Paste your API key into the password field and click **Set key**. Keys are stored in the DSH credential
+   store and are never sent back to the browser.
+4. Click **Test** to run a check against `/v1/models`.
 
-打开 **设置 → Mistral Pro → 账号**：
+You can generate an API key under [Code › Vibe CLI](https://chat.mistral.ai/code/extensions). The same key
+works across Free, subscription plans, and pay-as-you-go; requests consume your monthly plan allowance
+first before falling back to pay-as-you-go billing.
 
-1. 点击「添加账号」并填写名称（仅用于界面展示和排序）。
-2. 「凭据引用」填一个环境变量名，如 `MISTRAL_API_KEY`。
-3. 在密码框粘贴 API Key，点击「设置 Key」。Key 保存在 DSH 凭据存储中，前端不会回显。
-4. 点击「测试」，调用一次 `/v1/models` 验证连通性。
+Accounts are tried in list order (use ↑ / ↓ to adjust). The first enabled account acts as the primary. When
+a failover succeeds, the working account is promoted in memory for the rest of the process lifetime without
+modifying your saved config.
 
-API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页面创建。同一个 Key 通用于免费档、订阅套餐和按量付费；调用时会优先扣减套餐内的月度额度，用尽后再走按量计费。
+## Models
 
-配置多个账号时会按列表顺序调用，可用 ↑ / ↓ 调整优先级，排在第一位且已启用的为主账号。触发容灾切换后，可用账号会在当前进程内临时提为首选，不会改动配置文件。
+**Settings → Mistral Pro → Models** combines the built-in catalog with models returned by `/v1/models`.
+Uncheck **Visible** to hide a model from the picker. Context window, max output tokens, and **Default
+effort** (`reasoning_effort`) can be overridden per model.
 
-## 模型
+Built-in catalog (2026-11, 19 models total, 11 visible by default). With a key, the live `/v1/models`
+listing wins and aliases collapse into one entry:
 
-**设置 → Mistral Pro → 模型** 会合并展示内置模型列表与 `/v1/models` 返回的模型。取消勾选「显示」可从模型选择器中隐藏；上下文窗口、最大输出长度和默认 `reasoning_effort`（思考强度）均可按模型单独调整。
-
-内置目录（2026-11，共 19 个，默认显示 11 个）。有 Key 时以 `/v1/models` 为准，同一模型的别名会合并成一项：
-
-| 模型 | 上下文 | 思考强度 |
+| Model | Context | Reasoning |
 | --- | --- | --- |
 | `mistral-large-4` | 1M | low / medium / high |
 | `mistral-small-2603` | 256K | none / low / medium / high |
@@ -61,108 +109,176 @@ API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页�
 | `ministral-3-{14b,8b,3b}-25-12` | 256K | — |
 | `codestral-25-08` / `codestral-latest` | 256K | — |
 
-`mistral-large-2512`、`devstral-2512`、`mistral-medium-2508` 默认隐藏，需要时可在模型列表中开启。
+`mistral-large-2512`, `devstral-2512`, and `mistral-medium-2508` are hidden by default and can be enabled
+in the model table.
 
-## 额度面板
+## Usage Popover
 
-输入框工具栏右侧（OpenCode Go 胶囊旁）会多出一个 `● Mistral` 按钮，点击可查看：
+The plugin adds a `● Mistral` button to the composer toolbar. Clicking it opens a usage panel showing:
 
-- 各周期额度的使用比例、已用 / 总量及重置倒计时；
-- 预付余额与当月 API 账单消耗；
-- 手动刷新按钮与上次更新时间。
+- usage percentage, used / total quota, and reset countdown for each window;
+- prepaid credit balance and current-month API spend;
+- manual refresh and last-updated timestamp.
 
-按钮上默认展示第一个匹配 `Vibe`、`monthly` 或 `plan` 的额度窗口。页面切到后台时暂停轮询，切回前台时立即刷新。
+The toolbar button displays the first recognized quota window, prioritizing labels matching `Vibe`,
+`monthly`, or `plan`. Background tabs pause polling and refresh immediately when brought back into focus.
 
-额度数据来自 `api.mistral.ai/v1/billing/budget`，用你保存的 API Key 直接读取，不需要额外配置。接口返回 Vibe 和 API 两个月度预算：已用百分比、预算金额、重置时间。
+Usage comes from `api.mistral.ai/v1/billing/budget`, read with the API key you saved. No extra setup is
+needed. The endpoint returns the Vibe and API monthly budgets: percentage used, budget amount, and reset
+time.
 
-如果这个 Key 没有 usage 权限（账单接口返回 403），可以改用管理站点 Cookie：
+If the key lacks the usage permission (the billing endpoint answers 403), you can use an admin-site cookie
+instead:
 
-1. 登录 [Mistral Admin](https://admin.mistral.ai/organization/usage)。
-2. 打开浏览器开发者工具 → Network，任选一条发往 `admin.mistral.ai` 的请求，复制完整的 `Cookie` 请求头（需包含 `ory_session_*`；若含 `csrftoken`，插件会自动附带 `X-CSRFTOKEN`）。
-3. 打开 **设置 → Mistral Pro → 高级设置**，粘贴并点击「设置 Cookie」。
+1. Sign in to [Mistral Admin](https://admin.mistral.ai/organization/usage).
+2. Open DevTools → Network, select any request to `admin.mistral.ai`, and copy the full `Cookie` request
+   header. It must include `ory_session_*` (if `csrftoken` is present, the plugin sends `X-CSRFTOKEN`
+   automatically).
+3. Paste the header under **Settings → Mistral Pro → Advanced** and click **Set cookie**.
 
-Cookie 路径会请求 `GET /subscription`、`GET /api/billing/v2/usage?month=&year=` 和 `GET /api/billing/credits`，单个接口失败不影响其余数据展示；会话过期跳转到登录页时会在面板内提示更换。
+The cookie path queries `GET /subscription`, `GET /api/billing/v2/usage?month=&year=`, and
+`GET /api/billing/credits` independently, so a failure on one endpoint won't block the others. If the
+session expires and redirects to the login page, the panel prompts you to update the cookie.
 
-Key 能读账单时不需要 Cookie；读不到时面板会说明原因。
+## Request Flow & Failover
 
-## 请求与容灾
+The `llm` service passes session messages to the adapter, which formats them into OpenAI-compatible
+payloads, POSTs to `https://api.mistral.ai/v1/chat/completions`, and parses the SSE response into DSH
+`StreamChunk`s. Assistant reasoning history is replayed back as `thinking` chunks as required by Mistral's
+API.
 
-`llm` 服务将对话交给插件适配器后，会转换为 OpenAI 兼容格式并 POST 到 `https://api.mistral.ai/v1/chat/completions`，逐行解析 SSE 流并转为 DSH 的 `StreamChunk`。历史 assistant 消息中的 reasoning 会按 Mistral 的格式要求还原为 `thinking` 块发回。
+Account failover only triggers before the stream emits content:
 
-多账号切换仅在流式输出开始前触发：
+- On 401 / 403, 429, quota exhaustion, or a missing/invalid key, the adapter switches to the next account
+  and places the failed one on a 300-second in-memory cooldown.
+- Once text, reasoning, or a tool call has been emitted, errors are surfaced directly without switching
+  accounts so partial responses from different accounts are never mixed.
 
-- 遇到 401 / 403、429、额度耗尽、Key 缺失或格式错误时，自动尝试下一个账号，原账号默认冷却 300 秒。
-- 一旦已经产出正文、思考内容或工具调用，报错时直接中止，不再中途换号，以免把两个账号的回复拼在一起。
+## Prompt caching
 
-## 提示词缓存
+Mistral's [prompt caching](https://docs.mistral.ai/inference/conversations/advanced/prompt-caching) reuses
+previously computed prompt tokens when requests share the same **prefix**. Cached tokens are billed at 10%
+of the standard input price and are reported in `usage.prompt_tokens_details.cached_tokens`.
 
-每次请求都会带上 `prompt_cache_key`，并以同值的 `x-affinity` 头把请求固定到同一台服务器；`stream_options.include_usage` 让流里带回用量，缓存命中才能在 `usage.prompt_tokens_details.cached_tokens` 里被看到。之前不带 key 时，前缀再稳定也拿不到命中数据。
+Two facts from the documentation drive every decision here:
 
-- 默认 key 由本机主机名与用户名派生，跨会话、跨重启保持稳定，同一台机器上的所有会话共用它。
-- 需要区分身份（例如两个 Vibe 订阅）时，在配置里填 `cache.promptCacheKey` 覆盖默认值。
-- `cache.affinity` 与 `cache.reportUsage` 可单独关闭；关掉 `reportUsage` 就同时失去缓存命中数字。
+- `prompt_cache_key` is a **routing hint**. It "increases the chance of a cache hit, but doesn't guarantee
+  one" — a hit happens when the API finds a compatible cached prefix. The key does not create the cache;
+  prefix stability does.
+- Cache blocks are **64 tokens**. `cached_tokens` is always a multiple of 64, and prompts under 64 tokens
+  never hit. Longer shared prefixes reuse more.
 
-## 设置项
+What the plugin does to keep the prefix stable:
 
-- **账号**：增删、排序、启停、写入 Key（保存并启用）、连通性测试。
-- **模型**：显示开关、上下文窗口、最大输出、默认思考强度。
-- **高级**：自动容灾、冷却、超时、目录刷新、输出上限、代理、按钮显示模式、刷新间隔，以及可选的 Cookie 兜底。
+- It never injects volatile content (timestamps, session ids, counters) into the request.
+- It preserves message order and replays assistant reasoning as `thinking` blocks, so the prefix stays
+  byte-identical between turns.
+- It drops non-wire keys per role (`sanitizeMessage`), deterministically, so a foreign field can never
+  change the prefix on one turn and not the next.
+- It sends `stream_options.include_usage`, without which `cached_tokens` would never be reported at all.
 
-![Mistral Pro 设置页](docs/images/settings-zh.png)
+`advanced.promptCacheKey` selects the key:
 
-所有设置项改动后立即生效，无需重启插件。
+| Value | Key derivation | Best for |
+| --- | --- | --- |
+| `auto` (default) | model + system prompt + first user message | One long conversation: every appended turn keeps the same key. |
+| `shared` | model + system prompt only | Many short conversations that reuse the same (large) system prompt: the first turn of a new conversation can still hit the cached system-prompt prefix. |
+| `off` | field omitted | Providers or proxies that reject the field. |
+| any other string | sent as-is | Managing keys externally (one per workflow, team, or subscription). |
 
-## 调试路由
+`auto` and `shared` are a trade-off, not a ranking. `auto` isolates conversations, which is what Mistral
+recommends ("use a stable application-level identifier, such as a conversation ID"). `shared` gives up that
+isolation so separate conversations can reuse the system prompt. The provider still verifies prefix
+compatibility, so a shared key can only miss — it can never return another conversation's content.
 
-插件注册了以下同源只读路由，便于排查状态：
+The plugin also sends an `x-affinity` header with the same value, so the turns of one conversation land on
+the same server. `cache.affinity` and `cache.reportUsage` can be turned off independently; turning off
+`reportUsage` also costs you the cache-hit numbers.
 
-| 路由 | 说明 |
+To see what actually happened, `GET /plugins/dsh-mistral-pro/wire?limit=20` now includes a `usage` entry per
+request with `promptTokens` and `cachedTokens`. A hit rate near 0% with a stable prefix usually means the
+prompt is under 64 tokens, the cache expired between turns, or something upstream is rewriting the first
+messages.
+
+## Settings
+
+- **Accounts**: add, remove, reorder, enable/disable, store a key (save & enable), test connectivity.
+- **Models**: toggle visibility, override context window, max output, and default reasoning effort.
+- **Advanced**: automatic failover, cooldown, timeouts, catalog refresh, output cap, prompt-cache key,
+  transport, proxy, button display mode, refresh interval, and an optional cookie fallback.
+
+![Mistral Pro settings page](docs/images/settings-en.png)
+
+All settings take effect immediately without restarting the plugin.
+
+## Diagnostic Routes
+
+Same-origin read-only routes registered for troubleshooting:
+
+| Route | Description |
 | --- | --- |
-| `/plugins/dsh-mistral-pro/health` | 账号是否就绪、已注册的 provider、模型数量 |
-| `/plugins/dsh-mistral-pro/meta` | 当前生效的 usage / advanced / accounts 配置 |
-| `/plugins/dsh-mistral-pro/models` | 模型目录、可见性、上下文容量与思考强度 |
-| `/plugins/dsh-mistral-pro/usage?account=&force=1` | 聚合后的额度快照 |
-| `/plugins/dsh-mistral-pro/test?account=` | 用指定账号测试一次 `/v1/models` |
-| `/plugins/dsh-mistral-pro/refresh` | 立即刷新远端模型目录 |
-| `/plugins/dsh-mistral-pro/settings` | 设置命名空间与 revision |
-| `/plugins/dsh-mistral-pro/wire?limit=20` | 最近的 wire 指纹与逐条消息的键名布局 |
+| `/plugins/dsh-mistral-pro/health` | account status, registered providers, model count |
+| `/plugins/dsh-mistral-pro/meta` | active usage / advanced / accounts configuration |
+| `/plugins/dsh-mistral-pro/models` | model catalog, visibility, limits, reasoning options |
+| `/plugins/dsh-mistral-pro/usage?account=&force=1` | aggregated usage snapshot |
+| `/plugins/dsh-mistral-pro/test?account=` | run a `/v1/models` check against a specific account |
+| `/plugins/dsh-mistral-pro/refresh` | force a live model catalog refresh |
+| `/plugins/dsh-mistral-pro/settings` | settings namespace and revision |
+| `/plugins/dsh-mistral-pro/wire?limit=20` | newest wire fingerprints, per-message key layout, and cache usage |
 
-## 传输与 wire 日志
+## Transport and the wire log
 
-聊天请求走 `node:https`，直接把适配器已经序列化好的 body 写进 socket，不经过 `globalThis.fetch`。
+The chat request is posted over `node:https` with the body the adapter already serialized, not through
+`globalThis.fetch`.
 
-代理类插件会替换 `globalThis.fetch`，在请求出站时重新序列化 body。billion-context 的 ACP 循环就是其中之一：只要模型 id 命中 `/deepseek/i`，它就给每条带 `tool_calls` 的 assistant 消息补上 `reasoning_content: ""`，而 `deepseek-v4-1-flash-1017` 正好命中。Mistral 不接受 assistant 消息上的这个字段，于是第一次工具调用之后的每一轮都变成 `422 extra_forbidden`。同进程里的插件无法替换 `node:https`，所以适配器构造出的字节就是真正出站的字节。
+Proxy plugins replace `globalThis.fetch` and re-serialize request bodies on the way out. billion-context's
+ACP loop, for one, adds `reasoning_content: ""` to every assistant tool-call message whenever the model id
+matches `/deepseek/i` — and `deepseek-v4-1-flash-1017` does. Mistral forbids that field on assistant
+messages, so the rewrite turns every turn after the first tool call into `422 extra_forbidden`. `node:https`
+cannot be patched by another plugin in the same process, so the bytes the adapter builds are the bytes that
+leave the machine.
 
-- 设 `advanced.transport: fetch`（或环境变量 `DSH_MISTRAL_TRANSPORT=fetch`）可退回 fetch 路径。只有在 billion-context 已经修好之后才该这么做：先跑 `node ~/.dsh/bili-strict-echo-doctor.mjs --check`，返回 0 表示它不再给 Mistral 请求补 `reasoning_content`；此时 fetch 路径既能让压缩等包装层重新生效，又不会重现 422。
-- 配置了 `advanced.proxy` 时仍走 fetch + undici `ProxyAgent`，因为那条路径需要 dispatcher。
-- 代价：走 `node:https` 时发出的流量不经过代理插件的压缩与改写。正确性优先；`dsh-our-free-model` 记录过同样的取舍（见其 issue #50）。
+- `DSH_MISTRAL_TRANSPORT=fetch` restores the old path; use it only when no wrapper rewrites bodies.
+- A configured `advanced.proxy` always uses fetch + undici `ProxyAgent`, because that path needs the
+  dispatcher.
+- Trade-off: traffic sent this way skips a proxy plugin's compression and rewrite. Correctness comes first.
 
-每次请求都会向 `%TEMP%\dsh-mistral-wire.log` 追加一行（可用 `DSH_MISTRAL_WIRE_LOG` 改路径）：模型 id、消息条数、每条消息的 role 与键名、带 `reasoning_content` 的消息数，以及序列化 body 的 16 位 SHA-256。`/plugins/dsh-mistral-pro/wire?limit=20` 返回最新的若干条。日志保留 400 行，写日志失败不会影响请求。
+Every request appends one line to `%TEMP%\dsh-mistral-wire.log` (override with `DSH_MISTRAL_WIRE_LOG`):
+model id, message count, each message's role and keys, how many messages carry `reasoning_content`, and a
+16-hex SHA-256 of the serialized body. A second `usage` line records `promptTokens` and `cachedTokens`. The
+log is trimmed to 400 lines and a logging failure never interrupts a call.
 
-## 数据与隐私
+## Data & Privacy
 
-- 对话内容仅发往你配置的 Mistral API 端点。
-- 拉取模型目录时仅携带 API Key 和 `User-Agent`，不含对话内容。
-- 额度查询仅请求 `admin.mistral.ai`（端点可改）并携带你填入的 Cookie。
-- Key 与 Cookie 均保存在宿主凭据系统中，前端只能读取「是否已配置」状态。
+- Chat requests are sent only to the configured Mistral API endpoint.
+- Model catalog refreshes send only the API key and `User-Agent`.
+- Usage queries are sent only to `admin.mistral.ai` (configurable) using the cookie you provide.
+- API keys and cookies are stored in the host credential store; the browser only sees whether a credential
+  is set.
 
-## 已知限制
+## Known Limitations
 
-- `/v1/billing/budget` 与管理站点的额度接口都没有公开文档，插件按字段名读取；上游调整结构时部分窗口可能无法识别。
-- Mistral 公开 API 没有类似 `x-opencode-session` 的会话缓存路由头。
-- 容灾切换后的账号顺位只保留在内存中，进程重启后恢复为配置顺序。
-- 图片输入依赖 DSH 的 `attachments` 服务；缺失时会退化为文本占位符。
-- 代理功能要求宿主环境可解析 `undici`，否则请求会直接报错。
+- The `/v1/billing/budget` and admin usage endpoints are undocumented. The plugin reads them by field name,
+  so upstream schema changes may hide individual windows.
+- `prompt_cache_key` is a hint, not a guarantee: a stable prefix can still miss after the provider's cache
+  expires, and prompts under 64 tokens never hit.
+- Failover account promotion is kept in memory only and resets to the configured order when the process
+  restarts.
+- Image inputs require DSH's `attachments` service and fall back to placeholder text if unavailable.
+- Proxy support requires `undici` to be resolvable in the host environment; otherwise proxied requests fail
+  with an explicit error.
 
-## 开发与测试
+## Development
 
 ```sh
-node --test test/      # 20 个测试用例
-node --check index.js  # client.js 和 lib/*.js 同理
+node test/tool-name.mjs   # captured partner-model stream: the tool name survives
+node test/merged.mjs      # cache key, usage, output cap, retry policy, wire keys, attempt state
+node --check index.js     # same for client.js and lib/*.js
 ```
 
-测试通过本地 HTTP 服务模拟 Mistral SSE 流与管理后台接口，不发起外网请求，也不消耗额度。
+Tests run against a local mock HTTP server simulating Mistral SSE streams, with no external network calls
+and no API keys.
 
 ## License
 
-MIT · by 01NGVI-QINGYI
+MIT · originally by 01NGVI-QINGYI, fork maintained by lordraiden.

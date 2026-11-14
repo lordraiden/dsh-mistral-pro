@@ -1,11 +1,13 @@
 /**
  * dsh-mistral-pro browser half.
  *
- * Two contributions: a settings page that manages subscription accounts,
- * models, usage display and transport settings, and a composer usage pill that
- * reads the Host's usage route. All data crosses the same-origin plugin route
- * or the generated settings/credentials Remote namespaces; the API key never
- * reaches the browser.
+ * Three contributions: a settings page that manages subscription accounts,
+ * models, usage display and transport settings; a sidebar footer card that
+ * shows the combined subscription usage; and the statistics panel that card
+ * opens in the centre column. Both usage surfaces read the Host's existing
+ * routes. All data crosses the same-origin plugin route or the generated
+ * settings/credentials Remote namespaces; the API key never reaches the
+ * browser.
  */
 window.__ModuleLoader__.load({
   id: 'dsh-mistral-pro',
@@ -73,15 +75,13 @@ window.__ModuleLoader__.load({
       cookieMissing: 'No cookie',
       setCookie: 'Set cookie',
       clearCookie: 'Clear cookie',
-      displayLabel: 'Pill visibility',
-      displayAuto: 'Always (setup hint when unconfigured)',
+      displayLabel: 'Sidebar card visibility',
+      displayAuto: 'When an account is configured',
       displayAlways: 'Always',
       displayOff: 'Hidden',
       refreshSeconds: 'Refresh interval (seconds)',
       showCredits: 'Show credit balance',
       showCache: 'Show prompt-cache hit rate',
-      noCookie: 'Add an admin cookie to show subscription usage.',
-      monthly: 'Included monthly usage',
       credits: 'Credits',
       spend: 'API spend this month',
       updated: 'Updated {when}',
@@ -102,14 +102,20 @@ window.__ModuleLoader__.load({
       proxy: 'Proxy URL (http/https/socks5)',
       saveAdvanced: 'Save advanced settings',
       advancedSaved: 'Advanced settings saved.',
-      pillTitle: 'Mistral Pro usage',
       panelClose: 'Close',
       panelSetup: 'Open Settings → Mistral Pro to add an account and an API key.',
       panelNoData: 'No usage data yet.',
-      pillNoAccount: 'No Mistral account configured',
-      pillSetup: 'Open settings',
-      pillError: 'Usage unavailable',
-      pillRetry: 'Retry',
+      panelUnavailable: 'Usage unavailable',
+      cardTitle: 'Usage card',
+      cardNoAccount: 'no account',
+      cardUnavailable: 'unavailable',
+      cardNoData: '—',
+      subscriptionTitle: 'Subscription',
+      combinedTotal: 'Combined total',
+      resetsIn: 'Resets in {when}',
+      accountPrimary: 'primary',
+      accountDisabled: 'disabled',
+      modelsCount: '{count} models',
       loading: 'Loading…',
       timeNow: 'now',
       timeMinutesAgo: '{n} min ago',
@@ -123,12 +129,17 @@ window.__ModuleLoader__.load({
       panelCookieSteps: 'Sign in to admin.mistral.ai, copy the Cookie header from any request, and paste it under Settings → Mistral Pro → Advanced.',
       panelOpenAdmin: 'Open Mistral Admin',
       cacheTitle: 'Prompt cache',
-      cacheSummary: '{rate} hit rate · {count} requests',
       cacheTokens: '{cached} / {total} prompt tokens cached',
       cacheLast: 'Last request: {rate} · {model}',
       cacheEmpty: 'No cached requests recorded yet.',
       cacheUnavailable: 'Cache statistics are unavailable.',
       cacheRefresh: 'Refresh cache',
+      cacheHitRate: 'Hit rate',
+      cacheRequests: 'Requests',
+      cacheFailovers: 'Failovers',
+      cacheColdAfterFailover: 'Cold after failover',
+      cacheDistribution: 'Distribution',
+      cacheSteady: 'steady state',
       windowVibe: 'Vibe budget',
       windowApi: 'API budget',
       windowBudget: 'Monthly budget',
@@ -189,15 +200,13 @@ window.__ModuleLoader__.load({
       cookieMissing: '未配置 Cookie',
       setCookie: '设置 Cookie',
       clearCookie: '清除 Cookie',
-      displayLabel: '胶囊显示',
-      displayAuto: '始终显示（未配置时提示设置）',
+      displayLabel: '侧边栏卡片显示',
+      displayAuto: '已配置账号时显示',
       displayAlways: '常驻',
       displayOff: '隐藏',
       refreshSeconds: '刷新间隔（秒）',
       showCredits: '显示余额',
       showCache: '显示 Prompt 缓存命中率',
-      noCookie: '配置管理站点 Cookie 后可显示订阅额度。',
-      monthly: '月度包含额度',
       credits: '余额',
       spend: '本月 API 消费',
       updated: '{when}更新',
@@ -218,14 +227,20 @@ window.__ModuleLoader__.load({
       proxy: '代理地址（http/https/socks5）',
       saveAdvanced: '保存高级设置',
       advancedSaved: '高级设置已保存。',
-      pillTitle: 'Mistral Pro 额度',
       panelClose: '关闭',
       panelSetup: '打开 设置 → Mistral Pro 添加账号与 API Key。',
       panelNoData: '暂无用量数据。',
-      pillNoAccount: '尚未配置 Mistral 账号',
-      pillSetup: '打开设置',
-      pillError: '额度不可用',
-      pillRetry: '重试',
+      panelUnavailable: '额度不可用',
+      cardTitle: '额度卡片',
+      cardNoAccount: '未配置账号',
+      cardUnavailable: '不可用',
+      cardNoData: '—',
+      subscriptionTitle: '订阅',
+      combinedTotal: '合计',
+      resetsIn: '{when}后重置',
+      accountPrimary: '主账号',
+      accountDisabled: '已停用',
+      modelsCount: '{count} 个模型',
       loading: '加载中…',
       timeNow: '刚刚',
       timeMinutesAgo: '{n} 分钟前',
@@ -239,12 +254,17 @@ window.__ModuleLoader__.load({
       panelCookieSteps: '登录 admin.mistral.ai，从任意请求复制 Cookie 头，粘贴到 设置 → Mistral Pro → 高级设置。',
       panelOpenAdmin: '打开 Mistral Admin',
       cacheTitle: 'Prompt 缓存',
-      cacheSummary: '命中率 {rate} · {count} 次请求',
       cacheTokens: '{cached} / {total} 个 prompt token 命中缓存',
       cacheLast: '最近一次：{rate} · {model}',
       cacheEmpty: '还没有记录到缓存请求。',
       cacheUnavailable: '缓存统计不可用。',
       cacheRefresh: '刷新缓存',
+      cacheHitRate: '命中率',
+      cacheRequests: '请求数',
+      cacheFailovers: '故障切换',
+      cacheColdAfterFailover: '切换后冷启动',
+      cacheDistribution: '分布',
+      cacheSteady: '稳态',
       windowVibe: 'Vibe 额度',
       windowApi: 'API 额度',
       windowBudget: '月度预算',
@@ -300,15 +320,13 @@ window.__ModuleLoader__.load({
       cookieMissing: 'Cookie 未設定',
       setCookie: 'Cookie を設定',
       clearCookie: 'Cookie を削除',
-      displayLabel: 'ボタンの表示',
-      displayAuto: '常に表示（未設定時は設定を案内）',
+      displayLabel: 'サイドバーカードの表示',
+      displayAuto: 'アカウント設定時に表示',
       displayAlways: '常に表示',
       displayOff: '非表示',
       refreshSeconds: '更新間隔（秒）',
       showCredits: '残高を表示',
       showCache: 'プロンプトキャッシュのヒット率を表示',
-      noCookie: '管理サイトの Cookie を設定すると使用量を表示できます。',
-      monthly: '月次の使用枠',
       credits: '残高',
       spend: '今月の API 利用額',
       updated: '最終更新: {when}',
@@ -335,14 +353,20 @@ window.__ModuleLoader__.load({
       saveKeyEnable: '保存して有効化',
       cookieFallbackHint: '任意: キーで請求を読めない場合のみ、管理サイトの Cookie が必要です。',
       saveUsage: '使用量設定を保存',
-      pillTitle: 'Mistral Pro 使用量',
       panelClose: '閉じる',
       panelSetup: '設定 → Mistral Pro でアカウントと API キーを追加してください。',
       panelNoData: '使用量データはまだありません。',
-      pillNoAccount: 'Mistral アカウントが未設定です',
-      pillSetup: '設定を開く',
-      pillError: '使用量を取得できません',
-      pillRetry: '再試行',
+      panelUnavailable: '使用量を取得できません',
+      cardTitle: '使用量カード',
+      cardNoAccount: 'アカウント未設定',
+      cardUnavailable: '取得不可',
+      cardNoData: '—',
+      subscriptionTitle: 'サブスクリプション',
+      combinedTotal: '合計',
+      resetsIn: '{when}後にリセット',
+      accountPrimary: 'プライマリ',
+      accountDisabled: '無効',
+      modelsCount: '{count} モデル',
       loading: '読み込み中…',
       timeNow: 'たった今',
       timeMinutesAgo: '{n} 分前',
@@ -356,12 +380,17 @@ window.__ModuleLoader__.load({
       panelCookieSteps: 'admin.mistral.ai にログインし、任意のリクエストから Cookie ヘッダーをコピーして Settings → Mistral Pro → Advanced に貼り付けてください。',
       panelOpenAdmin: 'Mistral Admin を開く',
       cacheTitle: 'プロンプトキャッシュ',
-      cacheSummary: 'ヒット率 {rate} · {count} リクエスト',
       cacheTokens: 'プロンプト {cached} / {total} トークンがキャッシュ済み',
       cacheLast: '直近のリクエスト: {rate} · {model}',
       cacheEmpty: 'キャッシュされたリクエストはまだありません。',
       cacheUnavailable: 'キャッシュ統計を取得できません。',
       cacheRefresh: 'キャッシュを更新',
+      cacheHitRate: 'ヒット率',
+      cacheRequests: 'リクエスト数',
+      cacheFailovers: 'フェイルオーバー',
+      cacheColdAfterFailover: '切替後のコールド',
+      cacheDistribution: '分布',
+      cacheSteady: '定常状態',
       windowVibe: 'Vibe 使用枠',
       windowApi: 'API 使用枠',
       windowBudget: '月次予算',
@@ -413,7 +442,6 @@ window.__ModuleLoader__.load({
       ok: { color: 'var(--dsw-alias-state-success-primary)', fontSize: 12 },
       warn: { color: 'var(--dsw-alias-state-warn-primary)', fontSize: 12 },
       error: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12 },
-      bar: { height: 6, borderRadius: 3, background: 'var(--dsw-alias-bg-layer-2)', overflow: 'hidden', marginTop: 6 },
     }
 
     async function callRemote(ctx, namespace, method, ...args) {
@@ -1009,69 +1037,193 @@ window.__ModuleLoader__.load({
       )
     }
 
-    // ── Composer usage button + overlay panel ───────────────────────────────
+    // ── Sidebar usage card + statistics panel ───────────────────────────────
 
-    const panel = {
-      open: false,
-      listeners: new Set(),
-      set(open) {
-        if (panel.open === open) return
-        panel.open = open
-        for (const listener of panel.listeners) listener()
-      },
-      toggle() {
-        panel.set(!panel.open)
-      },
+    /**
+     * Panel id shared by the `sidebar.footer.action` card and the `main` slot
+     * cell, so the card selects this panel and nothing else.
+     */
+    const PANEL_ID = NS
+
+    /** Stylesheet id; prefixed with the package name so injection is idempotent. */
+    const CSS_ID = 'dsh-mistral-pro/usage.module.css'
+
+    /**
+     * The card and the panel stylesheet. Every colour is a host theme alias, so
+     * both surfaces follow the light/dark theme without a hard-coded palette:
+     * the Vibe segment is tertiary text (grey) and the API segment is primary
+     * text (white in dark, near-black in light).
+     */
+    const CSS = `
+/* The shell renders footer actions as a flex ROW whose occupants each declare
+   a full-width line, so a full-width card would overflow the column. The
+   anchor is load-bearing: "footerActions" is not a stem the shell owns alone,
+   so the rule is scoped under "footArea", which the sidebar alone declares.
+   The descendant combinator survives an extra wrapper appearing. */
+[class*="_footArea"] [class*="_footerActions"]{flex-direction:column}
+.mp-foot{box-sizing:border-box;flex:0 0 auto;width:100%;min-width:0;font:inherit;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;background:0 0;border:1px solid transparent;border-radius:10px;flex-direction:column;gap:6px;margin:0 0 4px;padding:8px;display:flex}
+.mp-foot:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l2)}
+.mp-foot:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.mp-footTop{align-items:baseline;gap:8px;min-width:0;display:flex}
+.mp-footName{white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-primary);min-width:0;overflow:hidden;font-size:13px;font-weight:500;line-height:20px}
+.mp-footAmount{flex:none;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mp-footPct{flex:none;width:34px;color:var(--dsw-alias-label-secondary);text-align:right;font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}
+/* The bar is a row of segment spans inside the track; the track itself paints
+   the empty remainder, and overflow:hidden gives the ends their pill shape so
+   the two segments meet without a rounded seam. */
+.mp-footBar{display:flex;background:var(--dsw-alias-bg-layer-2);border-radius:999px;height:5px;overflow:hidden}
+.mp-footSeg{flex:0 0 auto;display:block;height:100%;transition:width .3s ease}
+.mp-footSegVibe{background:var(--dsw-alias-label-tertiary)}
+.mp-footSegApi{background:var(--dsw-alias-label-primary)}
+.mp-spacer{flex:1}
+
+/* The 56px rail: one 36px icon button on the shell's own rail cell. */
+.mp-railButton{box-sizing:border-box;width:36px;height:36px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:1px solid transparent;border-radius:8px;flex:none;justify-content:center;align-items:center;margin:0 0 4px;padding:0;display:inline-flex}
+.mp-railButton:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.mp-railButton:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.mp-glyph{flex:none;justify-content:center;align-items:center;display:inline-flex;color:var(--dsw-alias-label-secondary)}
+
+/* ------------------------------------------------------------ statistics panel */
+.mp-main{background:var(--dsw-alias-bg-layer-1);width:100%;height:100%;overflow:auto;display:block}
+.mp-mainInner{max-width:760px;margin:0 auto;padding:24px 20px 40px;flex-direction:column;gap:14px;display:flex;color:var(--dsw-alias-label-primary)}
+.mp-header{align-items:flex-start;gap:10px;display:flex;flex-wrap:wrap}
+.mp-headerText{flex-direction:column;gap:2px;display:flex;min-width:0}
+.mp-title{margin:0;font-size:18px;font-weight:600;line-height:1.4}
+.mp-subtitle{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-meta{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums}
+.mp-close,.mp-refresh{box-sizing:border-box;font:inherit;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:4px 10px;font-size:12px;line-height:18px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.mp-close:hover,.mp-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.mp-close:focus-visible,.mp-refresh:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.mp-close{min-width:28px;padding:4px 8px}
+.mp-refresh:disabled{opacity:.55;cursor:default}
+.mp-hint{color:var(--dsw-alias-label-tertiary);margin:0;font-size:12px;line-height:1.5}
+.mp-link{color:var(--dsw-alias-brand-primary);font-size:12px}
+.mp-notice{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:12px;padding:12px 14px;flex-direction:column;gap:4px;display:flex}
+.mp-noticeError{border-color:var(--dsw-alias-state-error-primary)}
+.mp-noticeTitle{margin:0;font-size:13px;font-weight:600;line-height:1.5}
+.mp-noticeError .mp-noticeTitle{color:var(--dsw-alias-state-error-primary)}
+.mp-noticeHint{margin:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.55}
+
+.mp-card{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:14px;padding:16px 18px;flex-direction:column;gap:16px;display:flex}
+.mp-cardTitle{margin:0;font-size:13px;font-weight:600;line-height:1.4}
+.mp-block{flex-direction:column;gap:8px;display:flex}
+.mp-blockTitle{margin:0;color:var(--dsw-alias-label-tertiary);font-size:12px;font-weight:600;line-height:1.5;text-transform:uppercase;letter-spacing:.04em}
+
+.mp-windows{flex-direction:column;gap:14px;display:flex}
+.mp-window{flex-direction:column;gap:6px;display:flex}
+.mp-windowHead{align-items:baseline;gap:8px;display:flex}
+.mp-windowLabel{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500;line-height:1.5}
+.mp-windowValue{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mp-windowPct{color:var(--dsw-alias-label-primary);min-width:38px;text-align:right;font-size:12px;font-weight:600;line-height:1.5;font-variant-numeric:tabular-nums}
+.mp-bar{overflow:hidden;background:var(--dsw-alias-bg-layer-1);border-radius:999px;height:5px}
+.mp-barFill{height:100%;border-radius:999px;transition:width .3s ease}
+.mp-barFillVibe{background:var(--dsw-alias-label-tertiary)}
+.mp-barFillApi{background:var(--dsw-alias-label-primary)}
+.mp-windowReset{color:var(--dsw-alias-label-tertiary);margin:0;font-size:12px;line-height:1.5}
+
+.mp-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.mp-tile{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);border-radius:8px;padding:8px 10px;flex-direction:column;gap:2px;display:flex;min-width:0}
+.mp-tileLabel{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5}
+.mp-tileValue{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:600;line-height:1.4;font-variant-numeric:tabular-nums}
+.mp-tileSub{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.mp-distRow{align-items:center;gap:8px;display:flex;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
+.mp-distLabel{flex:0 0 64px;font-variant-numeric:tabular-nums}
+.mp-distTrack{flex:1;display:block;background:var(--dsw-alias-bg-layer-1);border-radius:999px;height:5px;overflow:hidden}
+.mp-distFill{display:block;height:100%;background:var(--dsw-alias-label-tertiary);border-radius:999px}
+.mp-distCount{flex:0 0 auto;min-width:40px;text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary)}
+
+.mp-accounts{flex-direction:column;display:flex}
+.mp-accountRow{align-items:center;gap:8px;display:flex;flex-wrap:wrap;min-width:0;padding:6px 0;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.mp-accountRow:last-child{border-bottom:0}
+.mp-accountName{color:var(--dsw-alias-label-primary);font-size:13px;font-weight:500;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mp-badge{white-space:nowrap;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-brand-primary);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600;line-height:17px}
+.mp-badgeMuted{white-space:nowrap;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:500;line-height:17px}
+.mp-badgeWarn{background:transparent;color:var(--dsw-alias-state-warn-primary)}
+.mp-footer{align-items:center;gap:10px;display:flex;flex-wrap:wrap}
+
+@media (prefers-reduced-motion:reduce){.mp-footSeg,.mp-barFill{transition:none}}
+`
+
+    /** Install one stylesheet by id and return a disposer for its owning effect. */
+    function injectCss(id, css) {
+      if (typeof document === 'undefined') return () => {}
+      if (document.querySelector(`style[data-plugin-css="${id}"]`) !== null) return () => {}
+      const tag = document.createElement('style')
+      tag.dataset.plugin = 'dsh-mistral-pro'
+      tag.dataset.pluginCss = id
+      tag.textContent = css
+      document.head.appendChild(tag)
+      return () => tag.remove()
     }
 
-    function usePanelOpen() {
-      const [open, setOpen] = useState(panel.open)
-      useEffect(() => {
-        const listener = () => setOpen(panel.open)
-        panel.listeners.add(listener)
-        return () => panel.listeners.delete(listener)
-      }, [])
-      return open
+    /** Read one numeric field, accepting numeric strings (the Host payload). */
+    function num(value) {
+      if (typeof value === 'number' && Number.isFinite(value)) return value
+      if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value)
+      return undefined
     }
 
-    const pillStyle = {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 6,
-      height: 26,
-      padding: '0 10px',
-      background: 'var(--dsw-alias-bg-layer-1)',
-      border: '1px solid var(--dsw-alias-border-l1)',
-      borderRadius: 999,
-      fontSize: 12,
-      lineHeight: '24px',
-      color: 'var(--dsw-alias-label-secondary)',
-      cursor: 'pointer',
-      whiteSpace: 'nowrap',
+    function clampPercent(value) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+      return Math.max(0, Math.min(100, value))
     }
 
-    function dot(color) {
-      return { width: 7, height: 7, borderRadius: 4, background: color, display: 'inline-block', flex: '0 0 auto' }
+    /** `api` for the API budget, `vibe` for everything else (Vibe, monthly). */
+    function windowKind(window) {
+      const id = String(window?.id ?? '')
+      const labelKey = String(window?.labelKey ?? '')
+      const label = String(window?.label ?? '')
+      return id === 'api' || /api/i.test(labelKey) || /api/i.test(label) ? 'api' : 'vibe'
     }
 
-    function primaryWindow(windows) {
-      if (!Array.isArray(windows) || windows.length === 0) return undefined
-      return windows.find((window) => /vibe|monthly|plan|included/i.test(String(window.label ?? ''))) ?? windows[0]
+    function windowLabel(window, t) {
+      if (typeof window?.labelKey === 'string' && window.labelKey !== '') return t(window.labelKey)
+      return typeof window?.label === 'string' && window.label !== '' ? window.label : '—'
     }
 
-    function toneFor(percent, failed, configured) {
-      if (failed) return configured ? 'var(--dsw-alias-state-warn-primary)' : 'var(--dsw-alias-state-idle-primary)'
-      if (percent === undefined) return 'var(--dsw-alias-state-idle-primary)'
-      if (percent >= 90) return 'var(--dsw-alias-state-error-primary)'
-      if (percent >= 70) return 'var(--dsw-alias-state-warn-primary)'
-      return 'var(--dsw-alias-state-success-primary)'
+    /** A window's used amount, derived from percent/total when the Host omits it. */
+    function windowUsed(window) {
+      const used = num(window?.used)
+      if (used !== undefined) return used
+      const total = num(window?.total)
+      const percent = num(window?.percent)
+      if (percent !== undefined && total !== undefined) return (percent / 100) * total
+      return undefined
     }
 
-    function UsageButton({ ctx, t }) {
+    /**
+     * Combine every budget window into one figure: the used amounts and the
+     * budgets are summed separately, and the percentage is their ratio. Only
+     * windows that carry BOTH a positive total and a resolvable used amount
+     * take part, so a window without a budget can never inflate the ratio.
+     */
+    function combinedUsage(windows) {
+      const list = Array.isArray(windows) ? windows : []
+      let totalUsed = 0
+      let totalBudget = 0
+      const segments = []
+      for (const window of list) {
+        const total = num(window?.total)
+        if (total === undefined || total <= 0) continue
+        const used = windowUsed(window)
+        if (used === undefined) continue
+        totalUsed += used
+        totalBudget += total
+        segments.push({ id: String(window?.id ?? segments.length), kind: windowKind(window), used, total })
+      }
+      const percent = totalBudget > 0 ? clampPercent((totalUsed / totalBudget) * 100) : undefined
+      return { totalUsed, totalBudget, percent, segments }
+    }
+
+    /** A segment's share of the combined budget, in percent. */
+    function segmentWidth(segment, totalBudget) {
+      if (!(totalBudget > 0)) return 0
+      return Math.round((segment.used / totalBudget) * 100000) / 1000
+    }
+
+    function useMeta() {
       const [meta, setMeta] = useState(null)
-      const [usage, setUsage] = useState(null)
-      const [error, setError] = useState(null)
-
       useEffect(() => {
         let cancelled = false
         void getJSON('/meta')
@@ -1083,9 +1235,217 @@ window.__ModuleLoader__.load({
           cancelled = true
         }
       }, [])
+      return meta
+    }
+
+    /** The quota ring: a faint track plus an arc whose sweep is the consumption. */
+    function Ring({ percent, size }) {
+      const clamped = clampPercent(percent) ?? 0
+      const circumference = 45.55
+      const dashoffset = Math.round(circumference * (1 - clamped / 100) * 1000) / 1000
+      return h(
+        'span',
+        { className: 'mp-glyph', 'aria-hidden': 'true' },
+        h(
+          'svg',
+          { viewBox: '0 0 20 20', width: size, height: size, focusable: 'false' },
+          h('circle', { cx: 10, cy: 10, r: 7.25, fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, opacity: 0.35 }),
+          h('circle', {
+            cx: 10,
+            cy: 10,
+            r: 7.25,
+            fill: 'none',
+            stroke: 'var(--dsw-alias-label-primary)',
+            strokeWidth: 2.5,
+            strokeLinecap: 'round',
+            strokeDasharray: String(circumference),
+            strokeDashoffset: String(dashoffset),
+            transform: 'rotate(-90 10 10)',
+          }),
+        ),
+      )
+    }
+
+    /** A labelled figure. */
+    function Tile({ label, value, sub }) {
+      return h(
+        'div',
+        { className: 'mp-tile' },
+        h('span', { className: 'mp-tileLabel' }, label),
+        h('span', { className: 'mp-tileValue' }, value),
+        sub !== undefined && sub !== '' ? h('span', { className: 'mp-tileSub' }, sub) : null,
+      )
+    }
+
+    /** One budget window: label, used / total, percent, a bar, the reset time. */
+    function WindowBlock({ window, t }) {
+      const kind = windowKind(window)
+      const total = num(window.total)
+      const used = windowUsed(window)
+      const percent = clampPercent(num(window.percent) ?? (used !== undefined && total !== undefined && total > 0 ? (used / total) * 100 : undefined))
+      const value = used !== undefined && total !== undefined ? `${money(used, window.unit)} / ${money(total, window.unit)}` : ''
+      const label = windowLabel(window, t)
+      return h(
+        'div',
+        { className: 'mp-window' },
+        h(
+          'div',
+          { className: 'mp-windowHead' },
+          h('span', { className: 'mp-windowLabel' }, label),
+          h('span', { className: 'mp-spacer' }),
+          value !== '' ? h('span', { className: 'mp-windowValue' }, value) : null,
+          h('span', { className: 'mp-windowPct' }, percent === undefined ? '—' : `${Math.round(percent)}%`),
+        ),
+        h(
+          'div',
+          {
+            className: 'mp-bar',
+            role: 'progressbar',
+            'aria-label': label,
+            'aria-valuemin': 0,
+            'aria-valuemax': 100,
+            'aria-valuenow': percent === undefined ? 0 : Math.round(percent),
+          },
+          h('div', {
+            className: `mp-barFill mp-barFill${kind === 'api' ? 'Api' : 'Vibe'}`,
+            style: { width: `${percent ?? 0}%` },
+          }),
+        ),
+        typeof window.resetsAt === 'string' && window.resetsAt !== ''
+          ? h('p', { className: 'mp-windowReset' }, fill(t('resetsIn'), { when: when(window.resetsAt, t) }))
+          : null,
+      )
+    }
+
+    /** The Host's hit-rate buckets, in display order. */
+    const HIT_RATE_BUCKETS = ['0', '1-25', '26-50', '51-75', '76-99', '100']
+
+    /** The prompt-cache card: steady-state hit rate, volume, distribution, last request. */
+    function CacheCard({ t, cache, cacheError }) {
+      const unavailable = cacheError !== null || (cache !== null && cache.ok === false)
+      const steady = cache?.steadyState
+      const steadyUsed = typeof steady?.requests === 'number' && steady.requests > 0
+      const hitRate = steadyUsed ? steady.hitRate : cache?.hitRate
+      const requests = steadyUsed ? steady.requests : cache?.requests
+      const promptTokens = steadyUsed ? steady.promptTokens : cache?.promptTokens
+      const cachedTokens = steadyUsed ? steady.cachedTokens : cache?.cachedTokens
+      const recent = Array.isArray(cache?.recent) ? cache.recent : []
+      const lastRequest = recent.length === 0 ? undefined : recent[recent.length - 1]
+      const lastRate = lastRequest !== undefined && lastRequest.promptTokens > 0 ? lastRequest.cachedTokens / lastRequest.promptTokens : undefined
+      const distribution = cache?.distribution !== null && typeof cache?.distribution === 'object' ? cache.distribution : {}
+      // `'0'` and `'100'` are integer-like keys, so plain enumeration would put
+      // them first; sort against the Host's bucket order instead.
+      const buckets = Object.keys(distribution).sort((left, right) => {
+        const leftIndex = HIT_RATE_BUCKETS.indexOf(left)
+        const rightIndex = HIT_RATE_BUCKETS.indexOf(right)
+        return (leftIndex === -1 ? HIT_RATE_BUCKETS.length : leftIndex) - (rightIndex === -1 ? HIT_RATE_BUCKETS.length : rightIndex)
+      })
+      const bucketTotal = buckets.reduce((sum, bucket) => sum + (Number.isFinite(distribution[bucket]) ? distribution[bucket] : 0), 0)
+
+      let body
+      if (unavailable) body = h('p', { className: 'mp-hint' }, t('cacheUnavailable'))
+      else if (cache === null) body = h('p', { className: 'mp-hint' }, t('loading'))
+      else if (requests === 0) body = h('p', { className: 'mp-hint' }, t('cacheEmpty'))
+      else
+        body = [
+          h(
+            'div',
+            { className: 'mp-tiles' },
+            h(Tile, { label: t('cacheHitRate'), value: ratePercent(hitRate), sub: steadyUsed ? t('cacheSteady') : undefined }),
+            h(Tile, { label: t('cacheRequests'), value: formatCount(requests) }),
+            h(Tile, { label: t('cacheFailovers'), value: formatCount(cache.failovers) }),
+            h(Tile, { label: t('cacheColdAfterFailover'), value: formatCount(cache.coldAfterFailover) }),
+          ),
+          h('p', { className: 'mp-hint' }, fill(t('cacheTokens'), { cached: formatCount(cachedTokens), total: formatCount(promptTokens) })),
+          buckets.length === 0
+            ? null
+            : h(
+                'div',
+                { className: 'mp-block' },
+                h('h4', { className: 'mp-blockTitle' }, t('cacheDistribution')),
+                buckets.map((bucket) =>
+                  h(
+                    'div',
+                    { className: 'mp-distRow', key: bucket },
+                    h('span', { className: 'mp-distLabel' }, `${bucket}%`),
+                    h(
+                      'span',
+                      { className: 'mp-distTrack' },
+                      h('span', {
+                        className: 'mp-distFill',
+                        style: { width: `${bucketTotal > 0 ? (distribution[bucket] / bucketTotal) * 100 : 0}%` },
+                      }),
+                    ),
+                    h('span', { className: 'mp-distCount' }, formatCount(distribution[bucket])),
+                  ),
+                ),
+              ),
+          lastRequest === undefined
+            ? null
+            : h('p', { className: 'mp-hint' }, fill(t('cacheLast'), { rate: ratePercent(lastRate), model: lastRequest.model ?? '—' })),
+        ]
+
+      return h(
+        'section',
+        { className: 'mp-card', 'aria-label': t('cacheTitle') },
+        h('h3', { className: 'mp-cardTitle' }, t('cacheTitle')),
+        body,
+      )
+    }
+
+    /** The configured accounts and the live model count. */
+    function AccountsCard({ t, meta, models }) {
+      const accounts = Array.isArray(meta?.accounts) ? meta.accounts : []
+      const modelCount = Array.isArray(models) ? models.length : undefined
+      return h(
+        'section',
+        { className: 'mp-card', 'aria-label': t('accountsTitle') },
+        h('h3', { className: 'mp-cardTitle' }, t('accountsTitle')),
+        accounts.length === 0
+          ? h('p', { className: 'mp-hint' }, t('accountsEmpty'))
+          : h(
+              'div',
+              { className: 'mp-accounts' },
+              accounts.map((account) =>
+                h(
+                  'div',
+                  { className: 'mp-accountRow', key: account.name },
+                  h('span', { className: 'mp-accountName' }, account.name),
+                  account.primary === true ? h('span', { className: 'mp-badge' }, t('accountPrimary')) : null,
+                  h('span', { className: 'mp-spacer' }),
+                  h('span', { className: 'mp-badgeMuted' }, account.enabled === false ? t('accountDisabled') : t('enabledLabel')),
+                  h(
+                    'span',
+                    { className: account.configured === true ? 'mp-badgeMuted' : 'mp-badgeMuted mp-badgeWarn' },
+                    account.configured === true ? t('configured') : t('missing'),
+                  ),
+                ),
+              ),
+            ),
+        h('p', { className: 'mp-hint' }, modelCount === undefined ? '' : fill(t('modelsCount'), { count: modelCount })),
+      )
+    }
+
+    /**
+     * The sidebar footer card, registered into `sidebar.footer.action` — the
+     * list the shell renders directly above the Settings seat. The shell wraps
+     * nothing here, so this component owns its surface: the button, its chrome
+     * and its accessible name. Expanded it draws ONE row (name, combined
+     * amount, combined percent) over a 5px bar split into one segment per
+     * budget window; collapsed to the 56px rail it is a 36px ring button.
+     *
+     * Visibility follows `usage.display`: `off` hides it, `auto` shows it once
+     * an account is configured, `always` always shows it. The entry stays
+     * REGISTERED either way — this is a render decision.
+     */
+    function SidebarCard({ t, wide, open }) {
+      const meta = useMeta()
+      const [usage, setUsage] = useState(null)
+      const [error, setError] = useState(null)
 
       const display = meta?.usage?.display ?? 'auto'
-      const visible = display !== 'off'
+      const configured = meta?.accounts?.some((account) => account.configured === true) === true
+      const visible = display === 'always' || (display === 'auto' && configured)
 
       useEffect(() => {
         if (!visible) return undefined
@@ -1119,41 +1479,78 @@ window.__ModuleLoader__.load({
 
       if (!visible) return null
 
-      const primary = primaryWindow(usage?.windows)
-      const percent = primary?.percent
-      const configured = meta?.accounts?.some((account) => account.configured === true) === true
+      const combined = combinedUsage(usage?.windows)
       const failed = error !== null || usage?.ok === false
-      const label = percent === undefined ? 'Mistral' : `Mistral ${Math.round(percent)}%`
+      const title = `${t('sectionTitle')} · ${t('cardTitle')}`
+      let stateText
+      if (!configured) stateText = t('cardNoAccount')
+      else if (failed) stateText = t('cardUnavailable')
+      else if (combined.segments.length === 0) stateText = t('cardNoData')
+
+      if (!wide) {
+        return h(
+          'button',
+          { type: 'button', className: 'mp-railButton', 'aria-label': title, title, onClick: () => open() },
+          h(Ring, { percent: combined.percent ?? 0, size: 18 }),
+        )
+      }
+
+      const unit = usage?.currency ?? usage?.windows?.[0]?.unit
+      const amount = combined.percent === undefined ? '' : `${money(combined.totalUsed, unit)} / ${money(combined.totalBudget, unit)}`
+      const percentText = combined.percent === undefined ? '' : `${Math.round(combined.percent)}%`
 
       return h(
         'button',
-        {
-          type: 'button',
-          style: pillStyle,
-          title: t('pillTitle'),
-          onClick: () => panel.toggle(),
-        },
-        h('span', { style: dot(toneFor(percent, failed, configured)) }),
-        h('span', null, label),
+        { type: 'button', className: 'mp-foot', 'aria-label': title, title, onClick: () => open() },
+        h(
+          'span',
+          { className: 'mp-footTop' },
+          h('span', { className: 'mp-footName' }, stateText === undefined ? t('sectionTitle') : `${t('sectionTitle')} · ${stateText}`),
+          stateText === undefined ? h('span', { className: 'mp-spacer' }) : null,
+          stateText === undefined ? h('span', { className: 'mp-footAmount' }, amount) : null,
+          stateText === undefined ? h('span', { className: 'mp-footPct' }, percentText) : null,
+        ),
+        h(
+          'span',
+          {
+            className: 'mp-footBar',
+            role: 'progressbar',
+            'aria-label': title,
+            'aria-valuemin': 0,
+            'aria-valuemax': 100,
+            'aria-valuenow': combined.percent === undefined ? 0 : Math.round(combined.percent),
+          },
+          combined.segments.map((segment) =>
+            h('span', {
+              key: segment.id,
+              className: `mp-footSeg mp-footSeg${segment.kind === 'api' ? 'Api' : 'Vibe'}`,
+              style: { width: `${segmentWidth(segment, combined.totalBudget)}%` },
+            }),
+          ),
+        ),
       )
     }
 
-    function UsagePanel({ ctx, t }) {
-      const open = usePanelOpen()
-      const [usage, setUsage] = useState(null)
-      const [error, setError] = useState(null)
+    /**
+     * The statistics panel, registered into the layout's keyed `main` slot under
+     * the same id the footer card selects, so the two are one navigation entry.
+     * It reads only the existing Host routes: /meta, /usage, /cache, /models.
+     */
+    function MistralPanel({ ctx, t, close }) {
       const [meta, setMeta] = useState(null)
-      const [busy, setBusy] = useState(false)
+      const [usage, setUsage] = useState(null)
+      const [usageError, setUsageError] = useState(null)
       const [cache, setCache] = useState(null)
       const [cacheError, setCacheError] = useState(null)
-      const [cacheBusy, setCacheBusy] = useState(false)
-      const [showCache, setShowCache] = useState(null)
+      const [models, setModels] = useState(null)
+      const [showCache, setShowCache] = useState(true)
+      const [busy, setBusy] = useState(false)
 
       useEffect(() => {
-        if (!open) return undefined
         let cancelled = false
-        void getJSON('/meta')
-          .then(async (value) => {
+        void (async () => {
+          try {
+            const value = await getJSON('/meta')
             if (cancelled) return
             setMeta(value)
             try {
@@ -1163,33 +1560,20 @@ window.__ModuleLoader__.load({
             } catch {
               if (!cancelled) setShowCache(true)
             }
-          })
-          .catch(() => {
+          } catch {
             if (!cancelled) setShowCache(true)
-          })
+          }
+        })()
         void getJSON('/usage?force=1')
           .then((value) => {
             if (!cancelled) {
               setUsage(value)
-              setError(null)
+              setUsageError(null)
             }
           })
           .catch((caught) => {
-            if (!cancelled) setError(String(caught?.message ?? caught))
+            if (!cancelled) setUsageError(String(caught?.message ?? caught))
           })
-        const onKey = (event) => {
-          if (event.key === 'Escape') panel.set(false)
-        }
-        window.addEventListener('keydown', onKey)
-        return () => {
-          cancelled = true
-          window.removeEventListener('keydown', onKey)
-        }
-      }, [open, ctx])
-
-      useEffect(() => {
-        if (!open || showCache !== true) return undefined
-        let cancelled = false
         void getJSON('/cache')
           .then((value) => {
             if (!cancelled) {
@@ -1203,207 +1587,133 @@ window.__ModuleLoader__.load({
               setCacheError(String(caught?.message ?? caught))
             }
           })
+        void getJSON('/models')
+          .then((value) => {
+            if (!cancelled) setModels(Array.isArray(value?.models) ? value.models : [])
+          })
+          .catch(() => {})
         return () => {
           cancelled = true
         }
-      }, [open, showCache])
-
-      if (!open) return null
+      }, [ctx])
 
       const refresh = async () => {
         setBusy(true)
         try {
-          setUsage(await getJSON('/usage?force=1'))
-          setError(null)
-        } catch (caught) {
-          setError(String(caught?.message ?? caught))
+          const [nextUsage, nextCache] = await Promise.allSettled([getJSON('/usage?force=1'), getJSON('/cache')])
+          if (nextUsage.status === 'fulfilled') {
+            setUsage(nextUsage.value)
+            setUsageError(null)
+          } else {
+            setUsageError(String(nextUsage.reason?.message ?? nextUsage.reason))
+          }
+          if (nextCache.status === 'fulfilled') {
+            setCache(nextCache.value)
+            setCacheError(null)
+          } else {
+            setCacheError(String(nextCache.reason?.message ?? nextCache.reason))
+          }
         } finally {
           setBusy(false)
         }
       }
 
-      const refreshCache = async () => {
-        setCacheBusy(true)
-        try {
-          setCache(await getJSON('/cache'))
-          setCacheError(null)
-        } catch (caught) {
-          setCache(null)
-          setCacheError(String(caught?.message ?? caught))
-        } finally {
-          setCacheBusy(false)
-        }
-      }
-
-      const windows = usage?.windows ?? []
+      const windows = Array.isArray(usage?.windows) ? usage.windows : []
+      const combined = combinedUsage(windows)
       const configured = meta?.accounts?.some((account) => account.configured === true) === true
-      const recent = Array.isArray(cache?.recent) ? cache.recent : []
-      const lastRequest = recent.length === 0 ? undefined : recent[recent.length - 1]
-      const lastRate = lastRequest !== undefined && lastRequest.promptTokens > 0 ? lastRequest.cachedTokens / lastRequest.promptTokens : 0
-      const cacheUnavailable = cacheError !== null || (cache !== null && cache.ok === false)
-      const cacheContent = cacheUnavailable
-        ? h('p', { style: S.hint }, t('cacheUnavailable'))
-        : cache === null
-          ? h('p', { style: S.hint }, t('loading'))
-          : cache.requests === 0
-            ? h('p', { style: S.hint }, t('cacheEmpty'))
-            : h(
-                'div',
-                null,
-                h(
-                  'p',
-                  { style: { ...S.hint, margin: '4px 0 0' } },
-                  fill(t('cacheSummary'), { rate: ratePercent(cache.hitRate), count: formatCount(cache.requests) }),
-                ),
-                h(
-                  'p',
-                  { style: { ...S.hint, margin: '2px 0 0' } },
-                  fill(t('cacheTokens'), { cached: formatCount(cache.cachedTokens), total: formatCount(cache.promptTokens) }),
-                ),
-                lastRequest === undefined
-                  ? null
-                  : h(
-                      'p',
-                      { style: { ...S.hint, margin: '2px 0 0' } },
-                      fill(t('cacheLast'), { rate: ratePercent(lastRate), model: lastRequest.model ?? '—' }),
-                    ),
-              )
+      const unit = usage?.currency ?? usage?.windows?.[0]?.unit
+      const subtitleParts = [usage?.plan, usage?.account ?? meta?.accounts?.[0]?.name].filter(
+        (part) => typeof part === 'string' && part !== '',
+      )
+      const subtitle = subtitleParts.length === 0 ? t('sectionSubtitle') : subtitleParts.join(' · ')
+      const cookieIssue = usage?.ok === false && (usage?.error?.code === 'NO_USAGE' || usage?.error?.code === 'NO_COOKIE')
+
+      let notice = null
+      if (usageError !== null) {
+        notice = h(
+          'div',
+          { className: 'mp-notice mp-noticeError' },
+          h('p', { className: 'mp-noticeTitle' }, t('panelUnavailable')),
+          h('p', { className: 'mp-noticeHint' }, usageError),
+        )
+      } else if (usage?.ok === false && !configured) {
+        notice = h('div', { className: 'mp-notice' }, h('p', { className: 'mp-noticeTitle' }, t('panelSetup')))
+      } else if (cookieIssue) {
+        notice = h(
+          'div',
+          { className: 'mp-notice' },
+          h('p', { className: 'mp-noticeTitle' }, t('panelCookieTitle')),
+          h('p', { className: 'mp-noticeHint' }, t('panelCookieBody')),
+          h('p', { className: 'mp-noticeHint' }, t('panelCookieSteps')),
+          h(
+            'a',
+            { className: 'mp-link', href: 'https://admin.mistral.ai/organization/usage', target: '_blank', rel: 'noreferrer' },
+            t('panelOpenAdmin'),
+          ),
+        )
+      } else if (usage?.ok === false) {
+        notice = h(
+          'div',
+          { className: 'mp-notice' },
+          h('p', { className: 'mp-noticeTitle' }, t('panelUnavailable')),
+          h('p', { className: 'mp-noticeHint' }, usage?.error?.message ?? ''),
+        )
+      }
 
       return h(
         'div',
-        {
-          style: {
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1200,
-            background: 'rgba(0, 0, 0, 0.55)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16,
-          },
-          onClick: () => panel.set(false),
-        },
+        { className: 'mp-main', role: 'region', 'aria-label': t('sectionTitle') },
         h(
           'div',
-          {
-            style: {
-              width: 'min(440px, 92vw)',
-              maxHeight: '76vh',
-              overflow: 'auto',
-              background: 'var(--dsw-alias-bg-layer-1)',
-              border: '1px solid var(--dsw-alias-border-l2)',
-              borderRadius: 12,
-              padding: '16px 18px',
-              boxShadow: '0 18px 48px rgba(0, 0, 0, 0.28)',
-            },
-            onClick: (event) => event.stopPropagation(),
-          },
+          { className: 'mp-mainInner' },
           h(
-            'div',
-            { style: { ...S.row, justifyContent: 'space-between', marginBottom: 6 } },
-            h('strong', { style: { ...S.title, fontSize: 15 } }, t('pillTitle')),
-            h('button', { style: S.button, onClick: () => panel.set(false) }, t('panelClose')),
-          ),
-          h(
-            'div',
-            { style: { ...S.row, justifyContent: 'space-between' } },
-            h('span', { style: S.hint }, usage?.account ?? meta?.accounts?.[0]?.name ?? ''),
-            h('span', { style: S.hint }, usage?.plan ?? ''),
-          ),
-
-          error !== null ? h('p', { style: S.error }, error) : null,
-          usage?.ok === false && !configured ? h('p', { style: S.hint }, t('panelSetup')) : null,
-          usage?.ok === false && configured && (usage?.error?.code === 'NO_USAGE' || usage?.error?.code === 'NO_COOKIE')
-            ? h(
-                'div',
-                { style: { marginTop: 10, padding: '10px 12px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)' } },
-                h('div', { style: { ...S.title, fontSize: 13, marginBottom: 4 } }, t('panelCookieTitle')),
-                h('p', { style: S.hint }, t('panelCookieBody')),
-                h('p', { style: S.hint }, t('panelCookieSteps')),
-                h(
-                  'a',
-                  {
-                    href: 'https://admin.mistral.ai/organization/usage',
-                    target: '_blank',
-                    rel: 'noreferrer',
-                    style: { color: 'var(--dsw-alias-brand-primary)', fontSize: 12 },
-                  },
-                  t('panelOpenAdmin'),
-                ),
-              )
-            : null,
-          usage?.ok === false && usage?.error?.code !== 'NO_USAGE' && usage?.error?.code !== 'NO_COOKIE'
-            ? h('p', { style: S.hint }, usage?.error?.message ?? t('pillError'))
-            : null,
-
-          windows.length === 0 && usage?.ok === true ? h('p', { style: S.hint }, t('panelNoData')) : null,
-
-          windows.map((window) =>
+            'header',
+            { className: 'mp-header' },
             h(
               'div',
-              { key: window.id, style: { marginTop: 12 } },
+              { className: 'mp-headerText' },
+              h('h2', { className: 'mp-title' }, t('sectionTitle')),
+              h('p', { className: 'mp-subtitle' }, subtitle),
+            ),
+            h('span', { className: 'mp-spacer' }),
+            h(
+              'button',
+              { type: 'button', className: 'mp-close', 'aria-label': t('panelClose'), title: t('panelClose'), onClick: () => close() },
               h(
-                'div',
-                { style: { ...S.row, justifyContent: 'space-between' } },
-                h('span', { style: { color: 'var(--dsw-alias-label-primary)', fontSize: 12 } }, window.labelKey ? t(window.labelKey) : window.label),
-                h('span', { style: S.hint }, window.percent === undefined ? '' : `${Math.round(window.percent)}%`),
-              ),
-              h(
-                'div',
-                { style: S.bar },
-                h('div', {
-                  style: {
-                    width: `${Math.max(0, Math.min(100, window.percent ?? 0))}%`,
-                    height: '100%',
-                    background:
-                      (window.percent ?? 0) >= 90
-                        ? 'var(--dsw-alias-state-error-primary)'
-                        : 'var(--dsw-alias-brand-primary)',
-                  },
-                }),
-              ),
-              h(
-                'div',
-                { style: { ...S.row, justifyContent: 'space-between', marginTop: 2 } },
-                h(
-                  'span',
-                  { style: S.hint },
-                  window.total !== undefined
-                    ? `${money(window.used, window.unit)} / ${money(window.total, window.unit)}`
-                    : '',
-                ),
-                h('span', { style: S.hint }, window.resetsAt ? when(window.resetsAt, t) : ''),
+                'svg',
+                { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', 'aria-hidden': 'true' },
+                h('path', { d: 'm6 6 12 12M18 6 6 18' }),
               ),
             ),
           ),
-
-          usage?.credits
-            ? h('p', { style: { ...S.hint, marginTop: 12 } }, `${t('credits')}: ${money(usage.credits.balance, usage.credits.currency)}`)
-            : null,
-          usage?.spend
-            ? h('p', { style: S.hint }, `${t('spend')}: ${money(usage.spend.amount, usage.spend.currency)}`)
-            : null,
-
-          showCache === true
-            ? h(
-                'div',
-                { style: { marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-2)' } },
-                h(
-                  'div',
-                  { style: { ...S.row, justifyContent: 'space-between' } },
-                  h('span', { style: { ...S.title, fontSize: 13 } }, t('cacheTitle')),
-                  h('button', { style: S.button, disabled: cacheBusy, onClick: () => void refreshCache() }, t('cacheRefresh')),
-                ),
-                cacheContent,
-              )
-            : null,
-
+          notice,
           h(
-            'div',
-            { style: { ...S.row, justifyContent: 'space-between', marginTop: 14 } },
-            h('span', { style: S.hint }, usage?.fetchedAt ? fill(t('updated'), { when: updated(usage.fetchedAt, t) }) : ''),
-            h('button', { style: S.button, disabled: busy, onClick: () => void refresh() }, t('refresh')),
+            'section',
+            { className: 'mp-card', 'aria-label': t('subscriptionTitle') },
+            h('h3', { className: 'mp-cardTitle' }, t('subscriptionTitle')),
+            windows.length === 0
+              ? h('p', { className: 'mp-hint' }, usage?.ok === true ? t('panelNoData') : t('loading'))
+              : h('div', { className: 'mp-windows' }, windows.map((window) => h(WindowBlock, { key: window.id, window, t }))),
+            h(
+              'div',
+              { className: 'mp-tiles' },
+              h(Tile, { label: t('credits'), value: usage?.credits ? money(usage.credits.balance, usage.credits.currency) : '—' }),
+              h(Tile, { label: t('spend'), value: usage?.spend ? money(usage.spend.amount, usage.spend.currency) : '—' }),
+              h(Tile, {
+                label: t('combinedTotal'),
+                value: combined.percent === undefined ? '—' : `${money(combined.totalUsed, unit)} / ${money(combined.totalBudget, unit)}`,
+                sub: combined.percent === undefined ? undefined : `${Math.round(combined.percent)}%`,
+              }),
+            ),
+          ),
+          showCache === true ? h(CacheCard, { t, cache, cacheError }) : null,
+          h(AccountsCard, { t, meta, models }),
+          h(
+            'footer',
+            { className: 'mp-footer' },
+            h('span', { className: 'mp-meta' }, usage?.fetchedAt ? fill(t('updated'), { when: updated(usage.fetchedAt, t) }) : ''),
+            h('span', { className: 'mp-spacer' }),
+            h('button', { type: 'button', className: 'mp-refresh', disabled: busy, onClick: () => void refresh() }, busy ? t('refreshing') : t('refresh')),
           ),
         ),
       )
@@ -1426,19 +1736,39 @@ window.__ModuleLoader__.load({
           ),
         )
 
-        ctx.slots.inject('conversation.input.right', () =>
-          ctx.slots.register(
-            { name: 'conversation.input.right', id: `${NS}-usage`, order: 1001 },
-            (props) => h(UsageButton, { ...props, ctx, t }),
-          ),
-        )
+        // The card selects the panel, so both share one id. `open`/`close` go
+        // through the layout service, which is optional: the card only renders
+        // inside the sidebar the layout owns, so it is always there in practice.
+        const panelFace = () => ({
+          open: () => ctx.get('layout')?.selectPanel(PANEL_ID),
+          close: () => ctx.get('layout')?.selectPanel(null),
+        })
 
-        ctx.slots.inject('shell.overlay', () =>
-          ctx.slots.register(
-            { name: 'shell.overlay', id: `${NS}-usage-panel`, order: 100 },
-            (props) => h(UsagePanel, { ...props, ctx, t }),
-          ),
-        )
+        ctx.effect(() => injectCss(CSS_ID, CSS), 'dsh-mistral-pro: usage card and panel styles')
+
+        try {
+          ctx.slots.inject('main', () =>
+            ctx.slots.register(
+              { name: 'main', key: PANEL_ID, locale: NS, inject: panelFace },
+              (props) => h(MistralPanel, { ...props, ctx, t }),
+            ),
+          )
+        } catch (error) {
+          console.error('[dsh-mistral-pro] could not register the usage panel:', error)
+        }
+
+        ctx.inject(['layout'], (layoutCtx) => {
+          try {
+            layoutCtx.slots.inject('sidebar.footer.action', () =>
+              layoutCtx.slots.register(
+                { name: 'sidebar.footer.action', id: PANEL_ID, order: 1, inject: panelFace },
+                (props) => h(SidebarCard, { ...props, ctx, t }),
+              ),
+            )
+          } catch (error) {
+            console.error('[dsh-mistral-pro] could not register the sidebar usage card:', error)
+          }
+        })
       },
     }
   },

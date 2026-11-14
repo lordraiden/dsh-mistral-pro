@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Mistral Pro",
-    "description": "Connects a Mistral subscription to DSH: multi-account failover, live model catalog, monthly usage pill and a settings page."
+    "description": "Connects a Mistral subscription to DSH: multi-account failover, live model catalog, sidebar usage card, statistics panel and a settings page."
   },
   "section": {
     "title": "Mistral Pro",
@@ -35,7 +35,10 @@
     "keyCleared": "Key cleared.",
     "save": "Save accounts",
     "saved": "Accounts saved.",
-    "saveFailed": "Could not save: {message}"
+    "saveFailed": "Could not save: {message}",
+    "primary": "primary",
+    "disabled": "disabled",
+    "models": "{count} models"
   },
   "models": {
     "title": "Models",
@@ -51,35 +54,37 @@
   },
   "usage": {
     "title": "Subscription usage",
-    "hint": "Mistral exposes subscription allowances on the admin site, which needs a browser session cookie. Paste a Cookie header from an admin.mistral.ai request to enable the usage pill.",
+    "hint": "Mistral exposes subscription allowances on the admin site, which needs a browser session cookie. Paste a Cookie header from an admin.mistral.ai request to enable the sidebar usage card.",
     "cookieRef": "Cookie credential reference",
     "cookieSet": "Cookie configured",
     "cookieMissing": "No cookie",
     "setCookie": "Set cookie",
     "clearCookie": "Clear cookie",
-    "display": "Pill visibility",
-    "displayAuto": "Always (setup hint when unconfigured)",
+    "display": "Sidebar card visibility",
+    "displayAuto": "When an account is configured",
     "displayAlways": "Always",
     "displayOff": "Hidden",
     "refreshSeconds": "Refresh interval (seconds)",
     "showCredits": "Show credit balance",
     "unavailable": "Usage unavailable",
-    "noCookie": "Add an admin cookie to show subscription usage.",
-    "monthly": "Included monthly usage",
     "credits": "Credits",
     "spend": "API spend this month",
-    "resets": "Resets {when}",
     "updated": "Updated {when}",
     "refresh": "Refresh"
   },
   "cache": {
     "title": "Prompt cache",
-    "summary": "{rate} hit rate · {count} requests",
     "tokens": "{cached} / {total} prompt tokens cached",
     "last": "Last request: {rate} · {model}",
     "empty": "No cached requests recorded yet.",
     "unavailable": "Cache statistics are unavailable.",
-    "refresh": "Refresh cache"
+    "refresh": "Refresh cache",
+    "hitRate": "Hit rate",
+    "requests": "Requests",
+    "failovers": "Failovers",
+    "coldAfterFailover": "Cold after failover",
+    "distribution": "Distribution",
+    "steady": "steady state"
   },
   "advanced": {
     "title": "Advanced",
@@ -101,12 +106,16 @@
     "save": "Save advanced settings",
     "saved": "Advanced settings saved."
   },
-  "pill": {
-    "loading": "Mistral",
-    "title": "Mistral Pro usage",
-    "noAccount": "No Mistral account configured",
-    "setup": "Open settings",
-    "error": "Usage unavailable",
-    "retry": "Retry"
+  "card": {
+    "title": "Usage card",
+    "noAccount": "no account",
+    "unavailable": "unavailable",
+    "noData": "—"
+  },
+  "panel": {
+    "subscription": "Subscription",
+    "combinedTotal": "Combined total",
+    "resets": "Resets in {when}",
+    "unavailable": "Usage unavailable"
   }
 }

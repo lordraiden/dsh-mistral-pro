@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Mistral Pro",
-    "description": "把 Mistral 订阅套餐接入 DSH：多账号无感容灾、实时模型目录、月度额度胶囊与设置页。"
+    "description": "把 Mistral 订阅套餐接入 DSH：多账号无感容灾、实时模型目录、侧边栏额度卡片、统计面板与设置页。"
   },
   "section": {
     "title": "Mistral Pro",
@@ -35,7 +35,10 @@
     "keyCleared": "Key 已清除。",
     "save": "保存账号",
     "saved": "账号已保存。",
-    "saveFailed": "保存失败：{message}"
+    "saveFailed": "保存失败：{message}",
+    "primary": "主账号",
+    "disabled": "已停用",
+    "models": "{count} 个模型"
   },
   "models": {
     "title": "模型",
@@ -51,35 +54,37 @@
   },
   "usage": {
     "title": "订阅额度",
-    "hint": "Mistral 的订阅额度在管理站点上，需要浏览器会话 Cookie。从 admin.mistral.ai 的请求里复制 Cookie 头即可启用额度胶囊。",
+    "hint": "Mistral 的订阅额度在管理站点上，需要浏览器会话 Cookie。从 admin.mistral.ai 的请求里复制 Cookie 头即可启用侧边栏额度卡片。",
     "cookieRef": "Cookie 凭据引用",
     "cookieSet": "已配置 Cookie",
     "cookieMissing": "未配置 Cookie",
     "setCookie": "设置 Cookie",
     "clearCookie": "清除 Cookie",
-    "display": "胶囊显示",
-    "displayAuto": "始终显示（未配置时提示设置）",
+    "display": "侧边栏卡片显示",
+    "displayAuto": "已配置账号时显示",
     "displayAlways": "常驻",
     "displayOff": "隐藏",
     "refreshSeconds": "刷新间隔（秒）",
     "showCredits": "显示余额",
     "unavailable": "额度不可用",
-    "noCookie": "配置管理站点 Cookie 后可显示订阅额度。",
-    "monthly": "月度包含额度",
     "credits": "余额",
     "spend": "本月 API 消费",
-    "resets": "{when} 重置",
     "updated": "{when} 更新",
     "refresh": "刷新"
   },
   "cache": {
     "title": "Prompt 缓存",
-    "summary": "命中率 {rate} · {count} 次请求",
     "tokens": "{cached} / {total} 个 prompt token 命中缓存",
     "last": "最近一次：{rate} · {model}",
     "empty": "还没有记录到缓存请求。",
     "unavailable": "缓存统计不可用。",
-    "refresh": "刷新缓存"
+    "refresh": "刷新缓存",
+    "hitRate": "命中率",
+    "requests": "请求数",
+    "failovers": "故障切换",
+    "coldAfterFailover": "切换后冷启动",
+    "distribution": "分布",
+    "steady": "稳态"
   },
   "advanced": {
     "title": "高级设置",
@@ -101,12 +106,16 @@
     "save": "保存高级设置",
     "saved": "高级设置已保存。"
   },
-  "pill": {
-    "loading": "Mistral",
-    "title": "Mistral Pro 额度",
-    "noAccount": "尚未配置 Mistral 账号",
-    "setup": "打开设置",
-    "error": "额度不可用",
-    "retry": "重试"
+  "card": {
+    "title": "额度卡片",
+    "noAccount": "未配置账号",
+    "unavailable": "不可用",
+    "noData": "—"
+  },
+  "panel": {
+    "subscription": "订阅",
+    "combinedTotal": "合计",
+    "resets": "{when}后重置",
+    "unavailable": "额度不可用"
   }
 }

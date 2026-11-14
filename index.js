@@ -12,7 +12,7 @@ import { resolveCatalog, isVisible } from './lib/catalog.js'
 import { AccountPool, resolveAccountKey } from './lib/accounts.js'
 import { MistralProAdapter } from './lib/adapter.js'
 import { createUsageService } from './lib/usage.js'
-import { readWire, wireLogPath } from './lib/wire.js'
+import { aggregateUsage, readWire, wireLogPath, WIRE_LOG_MAX_LINES } from './lib/wire.js'
 
 export { Config }
 export const name = 'dsh-mistral-pro'
@@ -245,6 +245,10 @@ export function apply(ctx, config) {
       const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 20) || 20, 1), 200)
       return json({ ok: true, path: wireLogPath(), entries: readWire(limit) })
     })
+
+    // Read the whole log: `readWire` defaults to 40 entries, which would silently
+    // drop older usage entries from the aggregate.
+    route('/cache', async () => json({ ok: true, ...aggregateUsage(readWire(WIRE_LOG_MAX_LINES)) }))
 
     route('/usage', async (request) => {
       const url = new URL(request.url)

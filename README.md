@@ -6,7 +6,7 @@
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
-![The Mistral Pro usage panel in the DeepSeek Harness composer, showing plan quota, reset countdown, prepaid credit and current-month spend](docs/images/usage-en.png)
+![The Mistral Pro statistics panel: Vibe and API budgets with reset countdowns, prompt-cache statistics and configured accounts](docs/images/usage-en.png)
 
 ## Contents
 
@@ -144,6 +144,8 @@ The plugin adds a card to the sidebar footer, beside Settings. It shows one comb
 Mistral wallets — the Vibe budget and the API budget — with a two-colour bar: grey for Vibe, the primary
 text colour for API. The percentage is the shared consumption (`used / total` across both budgets), so it
 no longer reads 0% while the API wallet is being spent.
+
+![The sidebar usage card with the combined Vibe and API spend](docs/images/card-en.png)
 
 Clicking the card opens the statistics panel:
 

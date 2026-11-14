@@ -6,7 +6,7 @@
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
-![DeepSeek Harness 侧边栏中的 Mistral Pro 额度卡片与统计面板：套餐额度、重置倒计时、预付余额与当月消耗](docs/images/usage-zh.png)
+![Mistral Pro 统计面板：Vibe 与 API 预算及重置倒计时、提示词缓存统计与已配置账号](docs/images/usage-zh.png)
 
 ## 目录
 
@@ -126,6 +126,8 @@ API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页�
 ## 侧边栏额度卡片与统计面板
 
 插件会在侧边栏底部（设置旁）添加一张卡片，把两个 Mistral 钱包——Vibe 预算和 API 预算——合并成一个数字，并用双色条展示：灰色代表 Vibe，主文字色代表 API。百分比是两者的合计消耗（`已用 / 总额`），因此不会再出现 API 钱包在消耗、卡片却显示 0% 的情况。
+
+![侧边栏额度卡片，展示 Vibe 与 API 的合计消耗](docs/images/card-en.png)
 
 点击卡片打开统计面板：
 

@@ -2,12 +2,16 @@
 // The adapter must keep the first non-empty name instead of erasing it.
 import http from 'node:http'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MistralProAdapter } from '../lib/adapter.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const captured = path.join(here, 'fixtures', 'mistral-tool-name.sse')
+
+// Keep diagnostic writes out of the live host's wire log.
+process.env.DSH_MISTRAL_WIRE_LOG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-mistral-tool-name-')), 'wire.log')
 
 const fixture = fs.existsSync(captured)
   ? fs.readFileSync(captured, 'utf8')

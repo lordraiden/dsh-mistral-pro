@@ -82,6 +82,11 @@
     "modelsRefresh": "模型目录刷新（分钟）",
     "maxTokensCap": "默认输出上限（token）",
     "promptCacheKey": "Prompt 缓存键（留空=自动，\"off\"=关闭）",
+    "cacheAffinity": "发送 x-affinity（未文档化的缓存路由提示）",
+    "cacheReportUsage": "上报流式用量（缓存 token）",
+    "cacheReportUsageHint": "关闭后也将看不到缓存命中的 token 数。",
+    "transport": "传输方式",
+    "transportHint": "https 通过 node:https 发送序列化后的请求体（默认，推荐）；fetch 允许进程内的包装层读取并改写请求。",
     "proxy": "代理地址（http/https/socks5）",
     "save": "保存高级设置",
     "saved": "高级设置已保存。"

@@ -93,6 +93,11 @@ window.__ModuleLoader__.load({
       modelsRefresh: 'Model catalog refresh (minutes)',
       maxTokensCap: 'Default output cap (tokens)',
       promptCacheKey: 'Prompt cache key (empty = auto, "off" = disable)',
+      cacheAffinity: 'Send x-affinity (undocumented cache-routing hint)',
+      cacheReportUsage: 'Report stream usage (cached tokens)',
+      cacheReportUsageHint: 'Turning this off also hides cached-token counts.',
+      transport: 'Transport',
+      transportHint: 'https posts the serialized body over node:https (default, correct); fetch lets in-process wrappers see and rewrite the request.',
       proxy: 'Proxy URL (http/https/socks5)',
       saveAdvanced: 'Save advanced settings',
       advancedSaved: 'Advanced settings saved.',
@@ -196,6 +201,11 @@ window.__ModuleLoader__.load({
       modelsRefresh: '模型目录刷新（分钟）',
       maxTokensCap: '默认输出上限（token）',
       promptCacheKey: 'Prompt 缓存键（留空=自动，"off"=关闭）',
+      cacheAffinity: '发送 x-affinity（未文档化的缓存路由提示）',
+      cacheReportUsage: '上报流式用量（缓存 token）',
+      cacheReportUsageHint: '关闭后也将看不到缓存命中的 token 数。',
+      transport: '传输方式',
+      transportHint: 'https 通过 node:https 发送序列化后的请求体（默认，推荐）；fetch 允许进程内的包装层读取并改写请求。',
       proxy: '代理地址（http/https/socks5）',
       saveAdvanced: '保存高级设置',
       advancedSaved: '高级设置已保存。',
@@ -294,6 +304,11 @@ window.__ModuleLoader__.load({
       modelsRefresh: 'モデルカタログの更新間隔（分）',
       maxTokensCap: '既定の出力上限（トークン）',
       promptCacheKey: 'プロンプトキャッシュキー（空=自動、"off"=無効）',
+      cacheAffinity: 'x-affinity を送信（未文書化のキャッシュルーティングヒント）',
+      cacheReportUsage: 'ストリームの使用量を報告（キャッシュトークン）',
+      cacheReportUsageHint: 'オフにするとキャッシュヒットのトークン数も見えなくなります。',
+      transport: 'トランスポート',
+      transportHint: 'https はシリアライズした本文を node:https で送信します（既定・推奨）。fetch はプロセス内のラッパーがリクエストを参照・書き換えできます。',
       proxy: 'プロキシ URL（http/https/socks5）',
       saveAdvanced: '詳細設定を保存',
       advancedSaved: '詳細設定を保存しました。',
@@ -487,6 +502,10 @@ window.__ModuleLoader__.load({
               showCredits: value.usage?.showCredits !== false,
             },
             advanced: { ...meta.advanced, ...(value.advanced ?? {}) },
+            cache: {
+              affinity: value.cache?.affinity !== false,
+              reportUsage: value.cache?.reportUsage !== false,
+            },
           })
         } catch (error) {
           setState((current) => ({ ...current, status: 'error', error: String(error?.message ?? error) }))
@@ -577,6 +596,7 @@ window.__ModuleLoader__.load({
       const setAccounts = (next) => setDraft({ ...draft, accounts: next })
       const setUsage = (next) => setDraft({ ...draft, usage: { ...draft.usage, ...next } })
       const setAdvanced = (next) => setDraft({ ...draft, advanced: { ...draft.advanced, ...next } })
+      const setCache = (next) => setDraft({ ...draft, cache: { ...draft.cache, ...next } })
 
       const saveAccounts = () => update({ accounts: serializeAccounts(accounts) }, t('saved'))
 
@@ -594,7 +614,7 @@ window.__ModuleLoader__.load({
       }
 
       const saveUsage = () => update({ usage: draft.usage }, t('saved'))
-      const saveAdvanced = () => update({ advanced: draft.advanced, usage: draft.usage }, t('advancedSaved'))
+      const saveAdvanced = () => update({ advanced: draft.advanced, usage: draft.usage, cache: draft.cache }, t('advancedSaved'))
 
       const setModel = (id, patch) =>
         setState((current) => ({
@@ -852,6 +872,26 @@ window.__ModuleLoader__.load({
               placeholder: 'auto',
               onChange: (event) => setAdvanced({ promptCacheKey: event.target.value }),
             })),
+            h(Field, { label: t('cacheAffinity') }, h('input', {
+              type: 'checkbox',
+              checked: draft.cache.affinity !== false,
+              onChange: (event) => setCache({ affinity: event.target.checked }),
+            })),
+            h(Field, { label: t('cacheReportUsage'), hint: t('cacheReportUsageHint') }, h('input', {
+              type: 'checkbox',
+              checked: draft.cache.reportUsage !== false,
+              onChange: (event) => setCache({ reportUsage: event.target.checked }),
+            })),
+            h(Field, { label: t('transport'), hint: t('transportHint') },
+              h('select', {
+                style: S.input,
+                value: draft.advanced.transport ?? 'https',
+                onChange: (event) => setAdvanced({ transport: event.target.value }),
+              },
+                h('option', { value: 'https' }, 'https'),
+                h('option', { value: 'fetch' }, 'fetch'),
+              ),
+            ),
             h(Field, { label: t('displayLabel') },
               h('select', {
                 style: S.input,

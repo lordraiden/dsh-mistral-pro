@@ -42,15 +42,16 @@ check(
 )
 check('recent keeps model ids', aggregate.recent.at(-1).model === 'mistral-small-4', String(aggregate.recent.at(-1).model))
 check(
-  'recent exposes only counts and model ids',
+  'recent exposes only counts, model ids and a hit rate',
   aggregate.recent.every(
-    (entry) => JSON.stringify(Object.keys(entry).sort()) === '["cachedTokens","model","promptTokens","ts"]',
+    (entry) => JSON.stringify(Object.keys(entry).sort()) === '["cachedTokens","hitRate","model","promptTokens","ts"]',
   ),
   JSON.stringify(aggregate.recent[0]),
 )
 check(
   'the aggregate has exactly the documented top-level keys',
-  JSON.stringify(Object.keys(aggregate).sort()) === '["cachedTokens","hitRate","promptTokens","recent","requests"]',
+  JSON.stringify(Object.keys(aggregate).sort()) ===
+    '["cachedTokens","distribution","hitRate","promptTokens","recent","requests","steadyState"]',
   JSON.stringify(Object.keys(aggregate)),
 )
 

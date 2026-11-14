@@ -256,6 +256,14 @@ messages.
 `GET /plugins/dsh-mistral-pro/cache` sums the whole log into `requests`, `promptTokens`, `cachedTokens`
 and `hitRate`, plus the 20 newest usage entries.
 
+
+### Usage accounting
+
+DSH counts token usage in **disjoint** buckets: `inputTokens` is uncached input, `cacheReadTokens` is the
+cached prefix, and the billed prompt is their sum. Mistral folds the cached prefix into `prompt_tokens`, so
+the adapter subtracts it before reporting. The `/cache` route keeps reporting the total prompt count, so
+its `hitRate` stays `cachedTokens / promptTokens`.
+
 ## Settings
 
 - **Accounts**: add, remove, reorder, enable/disable, store a key (save & enable), test connectivity.

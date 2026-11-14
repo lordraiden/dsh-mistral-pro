@@ -6,6 +6,17 @@ top of upstream `0.1.2`.
 
 ## Unreleased
 
+### Fixed
+
+- **Token usage now follows DSH's disjoint buckets.** Mistral folds the cached prefix into
+  `prompt_tokens`; the adapter reported that folded total as `inputTokens`, so `inputTokens +
+  cacheReadTokens` counted the cached prefix twice. Two consequences: the session statistics' cache-hit
+  percentage divided by the inflated prompt and showed roughly half the real rate (~50% for a conversation
+  that was ~98% cached), and DSH's token meter rejected the attempt as inconsistent
+  (`totalTokens - outputTokens < inputTokens + cacheReadTokens`), dropping turn usage and context
+  pressure. `inputTokens` is now uncached input only, `cacheReadTokens` keeps the cached prefix, and the
+  `/cache` route still divides by the total prompt count. Covered by `test/usage-accounting.mjs`.
+
 ### Docs and metadata
 
 - README (EN/ZH/JA) restructured for discoverability: a real `#` heading, a table of contents, an

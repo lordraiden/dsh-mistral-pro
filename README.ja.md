@@ -200,6 +200,11 @@ Mistral の[プロンプトキャッシュ](https://docs.mistral.ai/inference/co
 
 `GET /plugins/dsh-mistral-pro/cache` はログ全体を `requests`、`promptTokens`、`cachedTokens`、`hitRate` に集計し、最新 20 件の usage エントリも返します。
 
+
+### 使用量の計上
+
+DSH のトークン使用量は**重複しない**バケットです。`inputTokens` は未キャッシュの入力、`cacheReadTokens` はキャッシュされたプレフィックスで、課金対象の入力はその合計です。Mistral はキャッシュ分を `prompt_tokens` に含めるため、アダプターは報告前に差し引きます。`/cache` ルートは引き続きプロンプトの合計を返すので、`hitRate` は `cachedTokens / promptTokens` のままです。
+
 ## 設定項目
 
 - **Accounts**: アカウントの追加・削除、並び替え、有効/無効、API キーの保存（保存して有効化）、疎通テスト

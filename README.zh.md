@@ -200,6 +200,11 @@ Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/adv
 
 `GET /plugins/dsh-mistral-pro/cache` 会把整份日志汇总为 `requests`、`promptTokens`、`cachedTokens` 和 `hitRate`，并附带最新 20 条 usage 记录。
 
+
+### 用量口径
+
+DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入，`cacheReadTokens` 是命中的缓存前缀，计费输入是两者之和。Mistral 会把缓存前缀合并进 `prompt_tokens`，因此适配器上报前会先减掉它。`/cache` 路由仍上报 prompt 总量，所以 `hitRate` 依然是 `cachedTokens / promptTokens`。
+
 ## 设置项
 
 - **账号**：增删、排序、启停、写入 Key（保存并启用）、连通性测试。

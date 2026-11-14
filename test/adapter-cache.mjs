@@ -75,9 +75,90 @@ check(
   shared.prompt_cache_key !== build('auto', system).prompt_cache_key,
 )
 
+// --- compaction: the derived key rotates once per compaction ---
+// DSH marks the replacement user message of a compaction with
+// `source.kind === 'compact-checkpoint'` and a `compactionId`. The adapter reads
+// the original messages from `options.messages` (the wire messages passed as
+// the fourth argument have no `source`), so these cases exercise the real split.
+const wireConversation = [
+  { role: 'system', content: 'you are a coding agent' },
+  { role: 'user', content: 'summary of the compacted conversation' },
+]
+const plainSource = [
+  { role: 'system', content: 'you are a coding agent', source: { kind: 'system-prompt' } },
+  { role: 'user', content: 'summary of the compacted conversation', source: { kind: 'user' } },
+]
+const checkpointSource = (compactionId, extra = []) => [
+  plainSource[0],
+  { ...plainSource[1], source: { kind: 'compact-checkpoint', compactionId } },
+  ...extra,
+]
+const buildWithSource = (promptCacheKey, wire, source, model = MODEL) =>
+  adapter.buildBody({ model: model.id, messages: source }, model, config(promptCacheKey), wire)
+
+const autoPlain = buildWithSource('auto', wireConversation, plainSource)
+const autoCompacted = buildWithSource('auto', wireConversation, checkpointSource('cmp-1'))
+check('a compaction rotates the auto key', autoPlain.prompt_cache_key !== autoCompacted.prompt_cache_key)
+check('a compacted auto key is still a 64-char digest', isDigest(autoCompacted.prompt_cache_key))
+
+const sharedPlain = buildWithSource('shared', wireConversation, plainSource)
+const sharedCompacted = buildWithSource('shared', wireConversation, checkpointSource('cmp-1'))
+check('a compaction rotates the shared key', sharedPlain.prompt_cache_key !== sharedCompacted.prompt_cache_key)
+check('a compacted shared key is still a 64-char digest', isDigest(sharedCompacted.prompt_cache_key))
+
+// Two turns of the same post-compaction conversation share the id: no rotation.
+const appendedWire = [...wireConversation, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'and again' }]
+const appendedSource = checkpointSource('cmp-1', [
+  { role: 'assistant', content: 'ok', source: { kind: 'model' } },
+  { role: 'user', content: 'and again', source: { kind: 'user' } },
+])
+check(
+  'two turns sharing a compactionId keep the same auto key',
+  buildWithSource('auto', appendedWire, appendedSource).prompt_cache_key === autoCompacted.prompt_cache_key,
+)
+check(
+  'two turns sharing a compactionId keep the same shared key',
+  buildWithSource('shared', appendedWire, appendedSource).prompt_cache_key === sharedCompacted.prompt_cache_key,
+)
+
+// A second compaction rotates the key again.
+const recompacted = checkpointSource('cmp-2')
+check(
+  'a new compactionId rotates the auto key again',
+  buildWithSource('auto', wireConversation, recompacted).prompt_cache_key !== autoCompacted.prompt_cache_key,
+)
+check(
+  'a new compactionId rotates the shared key again',
+  buildWithSource('shared', wireConversation, recompacted).prompt_cache_key !== sharedCompacted.prompt_cache_key,
+)
+
+// No marker: a non-checkpoint source is ignored, so a session that never
+// compacted derives exactly the same key as before this change.
+check(
+  'a non-checkpoint source does not change the auto key',
+  autoPlain.prompt_cache_key === build('auto', wireConversation).prompt_cache_key,
+)
+check(
+  'a non-checkpoint source does not change the shared key',
+  sharedPlain.prompt_cache_key === build('shared', wireConversation).prompt_cache_key,
+)
+check(
+  'a custom key is never rotated by a compaction',
+  buildWithSource('team-shard-1', wireConversation, checkpointSource('cmp-1')).prompt_cache_key === 'team-shard-1',
+)
+
+// The no-system-message fallback must carry the generation through too.
+const noSystemWire = [{ role: 'user', content: 'summary' }]
+const noSystemCheckpoint = [{ role: 'user', content: 'summary', source: { kind: 'compact-checkpoint', compactionId: 'cmp-1' } }]
+check(
+  'the shared fallback carries the compaction generation',
+  buildWithSource('shared', noSystemWire, noSystemCheckpoint).prompt_cache_key ===
+    buildWithSource('auto', noSystemWire, noSystemCheckpoint).prompt_cache_key,
+)
+
 if (failures.length > 0) {
   console.error(`FAIL (${failures.length})`)
   for (const failure of failures) console.error(`  - ${failure}`)
   process.exit(1)
 }
-console.log('PASS: shared cache key falls back to the per-conversation derivation without a system message')
+console.log('PASS: shared cache key fallback and compaction-driven key rotation')

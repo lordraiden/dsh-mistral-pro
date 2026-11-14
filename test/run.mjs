@@ -2,8 +2,9 @@
 //
 // A new suite is picked up by adding `test/<name>.mjs`; nothing else has to be
 // registered, so a contributor cannot forget to wire it into `npm test`.
-import { readdirSync } from 'node:fs'
+import { readdirSync, mkdtempSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -18,10 +19,16 @@ if (suites.length === 0) {
   process.exit(1)
 }
 
+// Keep diagnostic writes out of the live host's wire log.
+const env = {
+  ...process.env,
+  DSH_MISTRAL_WIRE_LOG: join(mkdtempSync(join(tmpdir(), 'dsh-mistral-run-')), 'wire.log'),
+}
+
 const failed = []
 for (const suite of suites) {
   console.log(`\n=== ${suite} ===`)
-  const result = spawnSync(process.execPath, [join(here, suite)], { stdio: 'inherit' })
+  const result = spawnSync(process.execPath, [join(here, suite)], { stdio: 'inherit', env })
   if (result.error !== undefined) {
     console.error(`FAIL: ${suite}: ${result.error.message}`)
     failed.push(suite)

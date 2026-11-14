@@ -2,7 +2,13 @@
 // + upstream issue #1 patch series 0.1.3-0.1.8 (F-3..F-10) + the attempt-state
 // shadowing fix. No network, no keys: a local server replays a captured stream.
 import http from 'node:http'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { MistralProAdapter } from '../lib/adapter.js'
+
+// Keep diagnostic writes out of the live host's wire log.
+process.env.DSH_MISTRAL_WIRE_LOG = join(mkdtempSync(join(tmpdir(), 'dsh-mistral-merged-')), 'wire.log')
 
 const failures = []
 const check = (name, cond, detail = '') => {

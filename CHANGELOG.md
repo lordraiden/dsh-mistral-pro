@@ -1,6 +1,41 @@
 # Changelog
 
-Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-mistral-pro). Entries below are additions on top of upstream `0.1.2`.
+Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-mistral-pro), itself forked from
+[`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
+top of upstream `0.1.2`.
+
+## 0.3.0
+
+Merge of the two independent fix lineages that existed on top of upstream `0.1.2`:
+
+- **`santera-pixel` 0.2.0-0.2.4** — `prompt_cache_key` + `x-affinity` + `stream_options.include_usage`,
+  per-role wire-key allowlist, native `node:https` transport with an `advanced.transport` knob, the
+  `/wire` diagnostic route, and the empty-tool-name fix.
+- **upstream issue #1 patch series 0.1.3-0.1.8** — one `block-start` per block (F-3), `id` always a
+  string on `tool-call-delta` (F-6), resolved/flattened retry policy (F-7), truncated stream raises
+  `TRANSPORT` instead of ending clean (F-8), no injected `max_tokens` cap (F-9), per-conversation
+  `prompt_cache_key` (F-10).
+
+Reconciliation decisions:
+
+- **One cache knob.** `advanced.promptCacheKey` (`'auto'` | `'off'` | custom string, default `'auto'`)
+  is the single setting, because it is the one the settings page exposes. The fork's
+  `cache.promptCacheKey` and `lib/cache.js` were removed; `cache.affinity` and `cache.reportUsage`
+  stay (config-only, no UI).
+- **`advanced.maxTokensCap` default is `0`** (no cap), from the upstream series. Reasoning shares the
+  completion budget, so a cap that looks generous for text can be consumed by thinking alone.
+- **Tool-call accumulation** uses the upstream first-wins rule (`id`/`name` only update when
+  non-empty) and the fork's `incomingName` filtering; `tool-call-delta` always carries a string `id`.
+
+Additional fix not present in either lineage:
+
+- **Attempt state was shadowed inside `onTool`.** `const state = toolState.get(...)` shadowed the
+  attempt state passed to `streamWithAccount`, so `state.emitted` was never set for tool calls and a
+  mid-stream failure after a tool call could still trigger account failover and splice two accounts'
+  output into one turn. The local is now `tool`, and the attempt state is committed explicitly.
+
+Regression suite: `test/tool-name.mjs` (captured partner-model stream) and `test/merged.mjs`
+(cache key, usage reporting, output cap, retry policy shape, wire keys, tool name, attempt state).
 
 ## 0.2.4
 

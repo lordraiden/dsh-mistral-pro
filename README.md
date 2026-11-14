@@ -1,67 +1,67 @@
-### dsh-mistral-pro
+# dsh-mistral-pro
 
-Connects Mistral subscriptions (Vibe Pro / Team) to DeepSeek Harness. Provides the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a usage popover in the composer toolbar.
+**Mistral subscription (Vibe Pro / Team) provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).** Adds the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a subscription usage panel to the DSH composer.
 
 ![version](https://img.shields.io/badge/version-0.4.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
----
+![The Mistral Pro usage panel in the DeepSeek Harness composer, showing plan quota, reset countdown, prepaid credit and current-month spend](docs/images/usage-en.png)
 
-![Mistral Pro usage panel](docs/images/usage-en.png)
+## Contents
+
+- [At a glance](#at-a-glance)
+- [Why this plugin](#why-this-plugin)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Adding accounts](#adding-accounts)
+- [Models](#models)
+- [Usage popover](#usage-popover)
+- [Request flow and failover](#request-flow-and-failover)
+- [Prompt caching](#prompt-caching)
+- [Settings](#settings)
+- [Diagnostic routes](#diagnostic-routes)
+- [Transport and the wire log](#transport-and-the-wire-log)
+- [FAQ](#faq)
+- [Data and privacy](#data-and-privacy)
+- [Known limitations](#known-limitations)
+- [Development](#development)
+- [Fork lineage and upstream sync](#fork-lineage-and-upstream-sync)
+- [License](#license)
+
+## At a glance
+
+| | |
+| --- | --- |
+| Model route | `mistral-pro` |
+| Model catalog | 19 built-in models (11 visible by default), refreshed from `/v1/models` |
+| Failover | Several Mistral accounts, switched before the first streamed output |
+| Prompt caching | `auto` / `shared` / `off` cache keys, compaction-aware rotation, hit-rate route |
+| UI | Usage popover in the composer, Settings → Mistral Pro |
+| Transport | Native `node:https`, with an opt-in `fetch` path |
+
+## Why this plugin
+
+- **Mistral models inside DSH.** Registers the `mistral-pro` route with a 19-model catalog (11 visible by default), a live `/v1/models` refresh, and per-model context-window, output and reasoning-effort overrides.
+- **Multi-account failover.** Several Mistral keys are tried in order; an account that fails before the first streamed token is skipped and cooled down for 300 seconds.
+- **Prompt caching that can actually hit.** Stable prefixes, `auto` / `shared` / `off` cache keys, compaction-aware key rotation, and a route that reports the real `cached_tokens`.
+- **Subscription usage at a glance.** Quota windows, reset countdown, prepaid credit and current-month spend in the composer toolbar.
+- **Tested and observable.** 11 regression suites, CI on Node 22 and 24, a `0600` wire log, and read-only diagnostic routes.
 
 > **This is a fork.** [`lordraiden/dsh-mistral-pro`](https://github.com/lordraiden/dsh-mistral-pro) merges the two
 > independent fix lineages that existed on top of upstream `0.1.2`:
 > [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro) (0.2.0-0.2.4) and the
 > [upstream issue #1 patch series](https://github.com/01NGVI-QINGYI/dsh-mistral-pro/issues/1) (0.1.3-0.1.8).
-> See [CHANGELOG.md](CHANGELOG.md) for the full reconciliation.
+> See [CHANGELOG.md](CHANGELOG.md) for the full reconciliation and [Fork lineage](#fork-lineage-and-upstream-sync)
+> for the version policy.
 
-## What 0.4.0 changes
+## Requirements
 
-0.4.0 closes the audit issues opened against 0.3.0. Provider behaviour is unchanged by default; the release
-makes the existing behaviour tested, observable and documented.
-
-- **CI and a real test entry point.** `npm test` discovers every `test/*.mjs` suite and `npm run check`
-  syntax-checks every shipped file; GitHub Actions runs both on Node 22 and 24 for every push and pull
-  request to `main`.
-- **New coverage** for the native transport (byte-exact request body), account failover (before output
-  only), truncated streams (`TRANSPORT`), the retry-policy shape, and both cache-key modes.
-- **`shared` no longer degenerates** to a model-only key when the session has no system message: it falls
-  back to the per-conversation `auto` derivation.
-- **The cache key rotates once per context compaction**, using the checkpoint DSH puts on the replacement
-  user message. Sessions that never compact keep exactly the same key.
-- **`response_error` in the finish chunk is inspected.** A validation failure is logged, and an unusable
-  tool call raises `MALFORMED_RESPONSE` instead of being dispatched; the retry policy re-runs the request.
-- **New `/cache` diagnostic route** aggregates the wire log into requests, prompt/cached tokens and a hit
-  rate.
-- **The wire log is created `0600`**, and an existing wider log is tightened on the next write.
-- **Settings UI**: `cache.affinity`, `cache.reportUsage` and `advanced.transport` are editable in
-  Settings → Mistral Pro → Advanced.
-- **Docs**: the Chinese and Japanese READMEs are back at parity, and `CONTRIBUTING.md` documents the
-  upstream sync strategy and the independent version policy.
-- **`x-affinity` is documented as what it is**: an undocumented, unverified cache-routing hint (see
-  [Prompt caching](#prompt-caching)).
-
-## What 0.3.0 changes
-
-- **Tool calls no longer arrive as `unknown tool ""`.** Mistral repeats `function.name: ""` on every
-  continuation chunk of a streamed tool call; the accumulator now only accepts a non-empty name and keeps
-  the first one it saw.
-- **One `block-start` per block**, so the live thinking panel no longer collapses while streaming.
-- **`id` is always a string on `tool-call-delta`**, which the harness stream contract requires.
-- **Retry policy is the resolved, flattened shape**, so the first transient failure no longer dies with
-  `session event "llm/retry" carries non-JSON-serializable data`.
-- **A truncated stream raises `TRANSPORT`** instead of ending the turn "successfully" with partial output.
-- **No injected `max_tokens` cap** (`advanced.maxTokensCap` defaults to `0`). Reasoning shares the
-  completion budget, so a cap that looks generous for text can be consumed by thinking alone.
-- **Attempt state is committed on tool calls.** A mid-stream failure after a tool call can no longer
-  trigger account failover and splice two accounts' output into one turn.
-- **Prompt-cache tuning**: `advanced.promptCacheKey` now supports `auto`, `shared`, `off`, or a custom
-  string, and `/wire` records the `cached_tokens` each request actually returned.
+- DSH `>= 0.2.1-rc.5`
+- Node `^22.19.0 || >=24.0.0`
+- A Mistral account — Free, Vibe Pro / Team, or pay-as-you-go
 
 ## Installation
-
-Requires DSH `>= 0.2.1-rc.5` and Node `^22.19.0 || >=24.0.0`.
 
 Install the fork pinned to a release tag:
 
@@ -97,7 +97,7 @@ profile's shared dependencies (excluded when packing the tarball).
 Once installed, enable `dsh-mistral-pro` on the **Plugins** page and reload. A host restart is required
 after changing the installed version.
 
-## Adding Accounts
+## Adding accounts
 
 Open **Settings → Mistral Pro → Accounts**:
 
@@ -138,7 +138,7 @@ listing wins and aliases collapse into one entry:
 `mistral-large-2512`, `devstral-2512`, and `mistral-medium-2508` are hidden by default and can be enabled
 in the model table.
 
-## Usage Popover
+## Usage popover
 
 The plugin adds a `● Mistral` button to the composer toolbar. Clicking it opens a usage panel showing:
 
@@ -166,7 +166,7 @@ The cookie path queries `GET /subscription`, `GET /api/billing/v2/usage?month=&y
 `GET /api/billing/credits` independently, so a failure on one endpoint won't block the others. If the
 session expires and redirects to the login page, the panel prompts you to update the cookie.
 
-## Request Flow & Failover
+## Request flow and failover
 
 The `llm` service passes session messages to the adapter, which formats them into OpenAI-compatible
 payloads, POSTs to `https://api.mistral.ai/v1/chat/completions`, and parses the SSE response into DSH
@@ -179,6 +179,20 @@ Account failover only triggers before the stream emits content:
   and places the failed one on a 300-second in-memory cooldown.
 - Once text, reasoning, or a tool call has been emitted, errors are surfaced directly without switching
   accounts so partial responses from different accounts are never mixed.
+
+### Stream contract
+
+The adapter follows DSH's stream contract on the way back:
+
+- Streamed tool calls are accumulated from continuation chunks, and only a non-empty `function.name` is
+  accepted — Mistral repeats `function.name: ""` on every chunk of a streamed tool call.
+- Exactly one `block-start` is emitted per block, so the live thinking panel does not collapse while
+  streaming.
+- `id` is always a string on `tool-call-delta`.
+- A truncated stream raises `TRANSPORT` instead of ending the turn "successfully" with partial output.
+- The retry policy is the resolved, flattened, JSON-safe shape.
+- No `max_tokens` cap is injected by default (`advanced.maxTokensCap` is `0`): reasoning shares the
+  completion budget, so a cap that looks generous for text can be consumed by thinking alone.
 
 ## Prompt caching
 
@@ -257,11 +271,11 @@ and `hitRate`, plus the 20 newest usage entries.
     `node:https`; `fetch` routes through `globalThis.fetch` so in-process wrappers can see and rewrite
     the request.
 
-![Mistral Pro settings page](docs/images/settings-en.png)
+![The Mistral Pro settings page in DeepSeek Harness, with account, model and advanced sections](docs/images/settings-en.png)
 
 All settings take effect immediately without restarting the plugin.
 
-## Diagnostic Routes
+## Diagnostic routes
 
 Same-origin read-only routes registered for troubleshooting:
 
@@ -303,7 +317,44 @@ The log is created with mode `0600`: `%TEMP%` is usually `/tmp` (`1777`), and th
 metadata. If an older version left the file world-readable, the next write tightens it to `0600`, and
 rotation keeps that mode.
 
-## Data & Privacy
+## FAQ
+
+### Does it work with a free Mistral account?
+
+Yes. The same API key works across Free, subscription plans, and pay-as-you-go. Requests consume your
+monthly plan allowance first and fall back to pay-as-you-go billing after that.
+
+### Where do I get a Mistral API key?
+
+Generate one under [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) and paste it into
+**Settings → Mistral Pro → Accounts**.
+
+### Does it support tool calls, reasoning and images?
+
+Yes. Streamed tool calls are accumulated across continuation chunks, assistant reasoning is replayed as
+`thinking` blocks, and image inputs use DSH's `attachments` service (falling back to placeholder text when
+that service is unavailable).
+
+### Why is my prompt-cache hit rate 0%?
+
+Usually one of three things: the prompt is under 64 tokens, the cache expired between turns, or something
+upstream is rewriting the first messages. Check `/plugins/dsh-mistral-pro/wire?limit=20` for the per-request
+`cachedTokens`, and `/plugins/dsh-mistral-pro/cache` for the aggregate hit rate.
+
+### Is my API key sent anywhere besides Mistral?
+
+No. Chat requests go only to the configured Mistral API endpoint, catalog refreshes send only the API key
+and `User-Agent`, and usage queries go to `admin.mistral.ai` with the cookie you provide. Keys and cookies
+stay in the host credential store; the browser only sees whether a credential is set.
+
+### How is this different from `01NGVI-QINGYI/dsh-mistral-pro`?
+
+Upstream stopped at `0.1.2`. This fork merges the two independent fix lineages built on top of it, adds CI
+and regression suites, and ships the native `node:https` transport, prompt-cache key modes, the usage
+popover and the diagnostic routes. Version numbers are not comparable between the two repositories — see
+[Fork lineage](#fork-lineage-and-upstream-sync).
+
+## Data and privacy
 
 - Chat requests are sent only to the configured Mistral API endpoint.
 - Model catalog refreshes send only the API key and `User-Agent`.
@@ -311,7 +362,7 @@ rotation keeps that mode.
 - API keys and cookies are stored in the host credential store; the browser only sees whether a credential
   is set.
 
-## Known Limitations
+## Known limitations
 
 - The `/v1/billing/budget` and admin usage endpoints are undocumented. The plugin reads them by field name,
   so upstream schema changes may hide individual windows.
@@ -334,7 +385,14 @@ node test/tool-name.mjs   # or run a single suite directly
 Tests run against a local mock HTTP server simulating Mistral SSE streams, with no external network calls
 and no API keys.
 
-### Upstream sync
+## Fork lineage and upstream sync
+
+```text
+01NGVI-QINGYI 0.1.2 (263a4f0)
+├── santera-pixel 0.2.0 … 0.2.4
+└── upstream issue #1 patch series 0.1.3 … 0.1.8
+        └── this fork 0.3.0 → 0.4.0
+```
 
 This fork tracks upstream [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-mistral-pro)
 by cherry-picking concrete fixes — never by merging upstream `main`, which would revert the 0.2.x/0.3.0 work.
@@ -346,8 +404,9 @@ git fetch upstream --depth=50
 git log --oneline upstream/main
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the merge policy, the version policy and how to record a sync in
-`CHANGELOG.md`.
+The two `0.x` lines are independent: a higher number in one repository does not mean a newer tree in the
+other. See [CONTRIBUTING.md](CONTRIBUTING.md) for the merge policy, the version policy and how to record a
+sync in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

@@ -51,11 +51,16 @@
   },
   "keywords": [
     "deepseek-harness",
-    "dsh-plugin",
     "dsh",
+    "dsh-plugin",
     "mistral",
-    "vibe",
+    "mistral-ai",
+    "mistral-vibe",
+    "vibe-pro",
     "llm",
+    "llm-provider",
+    "model-provider",
+    "prompt-caching",
     "cordis"
   ],
   "peerDependencies": {

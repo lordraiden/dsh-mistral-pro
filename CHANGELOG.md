@@ -4,6 +4,17 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## Unreleased
+
+### Docs and metadata
+
+- README (EN/ZH/JA) restructured for discoverability: a real `#` heading, a table of contents, an
+  "At a glance" table, a "Why this plugin" section, a stream-contract subsection and an FAQ. The
+  per-version release notes moved out of the landing page and into this file.
+- GitHub topics expanded to ten (`deepseek-harness`, `dsh`, `dsh-plugin`, `mistral`, `mistral-ai`,
+  `mistral-vibe`, `llm-provider`, `model-provider`, `cordis`, `prompt-caching`) and the repository
+  description rewritten bilingually; npm `keywords` expanded to match.
+
 ## 0.4.0
 
 Closes the twelve audit issues opened against 0.3.0. Default provider behaviour is unchanged; the release

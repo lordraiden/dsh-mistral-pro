@@ -1,9 +1,10 @@
-// Prompt-cache key regression: the 'shared' mode falls back to the
+// Prompt-cache regression: the 'shared' mode falls back to the
 // per-conversation derivation when there is no system/developer message to
-// share, and keeps the shared derivation when there is one. Exercises the real
-// public path (`buildBody` with `advanced.promptCacheKey`), not a private
-// helper. No network, no keys.
-import { baseConfig, makeAdapter } from './support/harness.mjs'
+// share; the derived key rotates once per compaction; `x-affinity` is sent only
+// when `cache.affinity` is on. Exercises the real public path (`buildBody` with
+// `advanced.promptCacheKey`, and `stream` against a local server), not a
+// private helper. No network, no keys.
+import { baseConfig, drain, makeAdapter, startServer, textStream } from './support/harness.mjs'
 
 const failures = []
 const check = (name, cond, detail = '') => {
@@ -156,9 +157,47 @@ check(
     buildWithSource('auto', noSystemWire, noSystemCheckpoint).prompt_cache_key,
 )
 
+// --- x-affinity: undocumented routing hint, gated by cache.affinity ---
+// The header is kept (see the comment at its construction in lib/adapter.js),
+// but it must only be sent when the setting is on, and it must never replace
+// `prompt_cache_key`.
+async function affinityRun(affinity) {
+  let received
+  const server = await startServer((request, response) => {
+    const chunks = []
+    request.on('data', (chunk) => chunks.push(chunk))
+    request.on('end', () => {
+      received = { headers: request.headers, body: Buffer.concat(chunks).toString('utf8') }
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.end(textStream('ok'))
+    })
+  })
+  const config = baseConfig({
+    accounts: [{ name: 'only', apiKeyEnv: 'KEY_A', baseURL: server.url, enabled: true }],
+    cache: { affinity },
+  })
+  const adapter = makeAdapter({ config, keys: { KEY_A: 'key-a' } })
+  const result = await drain(adapter.stream({ model: MODEL.id, messages: [{ role: 'user', content: 'hello' }] }))
+  await server.close()
+  return { received, result }
+}
+
+const affinityOn = await affinityRun(true)
+check('the affinity stream completed', affinityOn.result.error === undefined, String(affinityOn.result.error))
+const sentKey = affinityOn.received === undefined ? undefined : JSON.parse(affinityOn.received.body).prompt_cache_key
+check('prompt_cache_key is still sent when affinity is on', isDigest(sentKey))
+check('x-affinity is sent when cache.affinity is true', typeof affinityOn.received?.headers['x-affinity'] === 'string')
+check('x-affinity matches prompt_cache_key', affinityOn.received?.headers['x-affinity'] === sentKey)
+
+const affinityOff = await affinityRun(false)
+check('the no-affinity stream completed', affinityOff.result.error === undefined, String(affinityOff.result.error))
+const offKey = affinityOff.received === undefined ? undefined : JSON.parse(affinityOff.received.body).prompt_cache_key
+check('prompt_cache_key is still sent when affinity is off', isDigest(offKey))
+check('x-affinity is omitted when cache.affinity is false', affinityOff.received?.headers['x-affinity'] === undefined)
+
 if (failures.length > 0) {
   console.error(`FAIL (${failures.length})`)
   for (const failure of failures) console.error(`  - ${failure}`)
   process.exit(1)
 }
-console.log('PASS: shared cache key fallback and compaction-driven key rotation')
+console.log('PASS: shared cache key fallback, compaction rotation, and x-affinity gating')

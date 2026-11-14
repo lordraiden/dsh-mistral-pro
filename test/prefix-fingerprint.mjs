@@ -117,7 +117,7 @@ check(
   usage.every(
     (entry) =>
       JSON.stringify(Object.keys(entry).sort()) ===
-      '["cachedTokens","conversation","event","messages","model","prefixMessages","prefixSha256","promptTokens","sha256","ts"]',
+      '["account","cachedTokens","conversation","event","messages","model","prefixMessages","prefixSha256","promptTokens","sha256","ts"]',
   ),
   JSON.stringify(usage[0]),
 )

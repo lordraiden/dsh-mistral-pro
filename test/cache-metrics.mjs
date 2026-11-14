@@ -36,6 +36,11 @@ check(
   JSON.stringify(empty.distribution),
 )
 check('an empty log has an empty recent window', empty.recent.length === 0)
+check(
+  'an empty log reports no failovers',
+  empty.failovers === 0 && empty.coldAfterFailover === 0,
+  JSON.stringify({ failovers: empty.failovers, coldAfterFailover: empty.coldAfterFailover }),
+)
 
 // --- one cold conversation plus one warm conversation ---
 // Every conversation's first request is cold by design: it cannot share a
@@ -141,6 +146,44 @@ check(
   JSON.stringify(zeroPrompt.recent),
 )
 check('a zero-prompt log keeps hitRate at 0, not NaN', zeroPrompt.hitRate === 0, String(zeroPrompt.hitRate))
+
+// --- a cold request right after an account switch is attributed ---
+// Prompt caches are per account, so the first request on the new account is a
+// full miss by design. Counting it separately keeps it from reading as a cache
+// regression.
+const failoverLog = [
+  { event: 'usage', ts: 1, account: 'primary', promptTokens: 1000, cachedTokens: 900, conversation: 'conv-a' },
+  { event: 'failover', ts: 2, from: 'primary', to: 'backup', reason: 'AUTH' },
+  { event: 'usage', ts: 3, account: 'backup', promptTokens: 1000, cachedTokens: 0, conversation: 'conv-a' },
+  { event: 'usage', ts: 4, account: 'backup', promptTokens: 1000, cachedTokens: 950, conversation: 'conv-a' },
+  { event: 'failover', ts: 5, from: 'backup', to: 'primary', reason: 'QUOTA' },
+  { event: 'usage', ts: 6, account: 'primary', promptTokens: 1000, cachedTokens: 0, conversation: 'conv-b' },
+  { event: 'usage', ts: 7, account: 'other', promptTokens: 1000, cachedTokens: 500, conversation: 'conv-b' },
+  { event: 'usage', ts: 8, promptTokens: 1000, cachedTokens: 0 },
+  { event: 'usage', ts: 9, account: 'primary', promptTokens: 1000, cachedTokens: 0 },
+]
+const failoverAggregate = aggregateUsage(failoverLog)
+check('failovers counts the failover entries', failoverAggregate.failovers === 2, String(failoverAggregate.failovers))
+check(
+  'coldAfterFailover counts only a cold request on a different account',
+  failoverAggregate.coldAfterFailover === 2,
+  String(failoverAggregate.coldAfterFailover)
+)
+check(
+  'a warm request on a different account is not counted',
+  aggregateUsage([
+    { event: 'usage', account: 'primary', promptTokens: 1000, cachedTokens: 900 },
+    { event: 'usage', account: 'backup', promptTokens: 1000, cachedTokens: 500 },
+  ]).coldAfterFailover === 0,
+)
+check(
+  'an entry without an account breaks the comparison',
+  aggregateUsage([
+    { event: 'usage', account: 'primary', promptTokens: 1000, cachedTokens: 900 },
+    { event: 'usage', promptTokens: 1000, cachedTokens: 0 },
+    { event: 'usage', account: 'backup', promptTokens: 1000, cachedTokens: 0 },
+  ]).coldAfterFailover === 0,
+)
 
 // --- the conversation id is a stable digest of the key ---
 const id = conversationId('team-shard-1')

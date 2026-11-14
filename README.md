@@ -1,8 +1,8 @@
 # dsh-mistral-pro
 
-**Mistral subscription (Vibe Pro / Team) provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).** Adds the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a subscription usage panel to the DSH composer.
+**Mistral subscription (Vibe Pro / Team) provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).** Adds the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a sidebar usage card with a statistics panel.
 
-![version](https://img.shields.io/badge/version-0.5.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.6.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -16,7 +16,7 @@
 - [Installation](#installation)
 - [Adding accounts](#adding-accounts)
 - [Models](#models)
-- [Usage popover](#usage-popover)
+- [Sidebar usage card and statistics panel](#sidebar-usage-card-and-statistics-panel)
 - [Request flow and failover](#request-flow-and-failover)
 - [Prompt caching](#prompt-caching)
 - [Settings](#settings)
@@ -37,7 +37,7 @@
 | Model catalog | 19 built-in models (11 visible by default), refreshed from `/v1/models` |
 | Failover | Several Mistral accounts, switched before the first streamed output |
 | Prompt caching | `auto` / `shared` / `off` cache keys, compaction-aware rotation, hit-rate route |
-| UI | Usage popover in the composer, Settings → Mistral Pro |
+| UI | Sidebar usage card, statistics panel, Settings → Mistral Pro |
 | Transport | Native `node:https`, with an opt-in `fetch` path |
 
 ## Why this plugin
@@ -138,16 +138,25 @@ listing wins and aliases collapse into one entry:
 `mistral-large-2512`, `devstral-2512`, and `mistral-medium-2508` are hidden by default and can be enabled
 in the model table.
 
-## Usage popover
+## Sidebar usage card and statistics panel
 
-The plugin adds a `● Mistral` button to the composer toolbar. Clicking it opens a usage panel showing:
+The plugin adds a card to the sidebar footer, beside Settings. It shows one combined figure for the two
+Mistral wallets — the Vibe budget and the API budget — with a two-colour bar: grey for Vibe, the primary
+text colour for API. The percentage is the shared consumption (`used / total` across both budgets), so it
+no longer reads 0% while the API wallet is being spent.
 
-- usage percentage, used / total quota, and reset countdown for each window;
+Clicking the card opens the statistics panel:
+
+- each wallet with its used / total, percentage and reset countdown;
 - prepaid credit balance and current-month API spend;
+- the combined total;
+- prompt-cache statistics: steady-state hit rate, per-request distribution, failovers and the last request;
+- configured accounts and the model count;
 - manual refresh and last-updated timestamp.
 
-The toolbar button displays the first recognized quota window, prioritizing labels matching `Vibe`,
-`monthly`, or `plan`. Background tabs pause polling and refresh immediately when brought back into focus.
+Visibility follows **Settings → Mistral Pro → Usage → Sidebar card visibility**: `auto` shows the card when
+an account is configured, `always` pins it, and `off` hides it. Background tabs pause polling and refresh
+immediately when brought back into focus.
 
 Usage comes from `api.mistral.ai/v1/billing/budget`, read with the API key you saved. No extra setup is
 needed. The endpoint returns the Vibe and API monthly budgets: percentage used, budget amount, and reset
@@ -276,6 +285,8 @@ its `hitRate` stays `cachedTokens / promptTokens`.
 
 - **Accounts**: add, remove, reorder, enable/disable, store a key (save & enable), test connectivity.
 - **Models**: toggle visibility, override context window, max output, and default reasoning effort.
+- **Usage**: sidebar card visibility (`auto` / `always` / `off`), refresh interval, credit balance,
+  prompt-cache section, and the optional admin cookie.
 - **Advanced**: automatic failover, cooldown, timeouts, catalog refresh, output cap, prompt-cache key,
   cache affinity, stream usage reporting, transport, proxy, button display mode, refresh interval, and an
   optional cookie fallback.
@@ -283,8 +294,8 @@ its `hitRate` stays `cachedTokens / promptTokens`.
     undocumented, unverified cache-routing hint (see [Prompt caching](#prompt-caching)).
   - **Report stream usage** (`cache.reportUsage`, on by default): sends
     `stream_options.include_usage`; turning it off also hides the `cachedTokens` counts.
-  - **Show prompt-cache hit rate** (`usage.showCache`, on by default): the popover section that reads
-    `/cache` and shows the rate, the cached / total prompt tokens and the last request.
+  - **Show prompt-cache hit rate** (`usage.showCache`, on by default): the statistics-panel section that
+    reads `/cache` and shows the rate, the cached / total prompt tokens and the last request.
   - **Transport** (`advanced.transport`, default `https`): `https` posts the serialized body over
     `node:https`; `fetch` routes through `globalThis.fetch` so in-process wrappers can see and rewrite
     the request.
@@ -371,8 +382,8 @@ stay in the host credential store; the browser only sees whether a credential is
 ### How is this different from `01NGVI-QINGYI/dsh-mistral-pro`?
 
 Upstream stopped at `0.1.2`. This fork merges the two independent fix lineages built on top of it, adds CI
-and regression suites, and ships the native `node:https` transport, prompt-cache key modes, the usage
-popover and the diagnostic routes. Version numbers are not comparable between the two repositories — see
+and regression suites, and ships the native `node:https` transport, prompt-cache key modes, the sidebar usage card, the statistics
+panel and the diagnostic routes. Version numbers are not comparable between the two repositories — see
 [Fork lineage](#fork-lineage-and-upstream-sync).
 
 ## Data and privacy

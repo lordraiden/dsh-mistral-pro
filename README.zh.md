@@ -1,12 +1,12 @@
 # dsh-mistral-pro
 
-**在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）中接入 Mistral 订阅（Vibe Pro / Team）的模型提供方插件。** 提供 `mistral-pro` 模型路由、多账号故障切换、提示词缓存调优，以及输入框工具栏的订阅额度面板。
+**在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）中接入 Mistral 订阅（Vibe Pro / Team）的模型提供方插件。** 提供 `mistral-pro` 模型路由、多账号故障切换、提示词缓存调优，以及侧边栏额度卡片与统计面板。
 
-![version](https://img.shields.io/badge/version-0.5.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.6.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
-![DeepSeek Harness 输入框中的 Mistral Pro 额度面板：套餐额度、重置倒计时、预付余额与当月消耗](docs/images/usage-zh.png)
+![DeepSeek Harness 侧边栏中的 Mistral Pro 额度卡片与统计面板：套餐额度、重置倒计时、预付余额与当月消耗](docs/images/usage-zh.png)
 
 ## 目录
 
@@ -16,7 +16,7 @@
 - [安装](#安装)
 - [添加账号](#添加账号)
 - [模型](#模型)
-- [额度面板](#额度面板)
+- [侧边栏额度卡片与统计面板](#侧边栏额度卡片与统计面板)
 - [请求与容灾](#请求与容灾)
 - [提示词缓存](#提示词缓存)
 - [设置项](#设置项)
@@ -37,7 +37,7 @@
 | 模型目录 | 内置 19 个模型（默认显示 11 个），随 `/v1/models` 刷新 |
 | 容灾 | 多账号，仅在首个流式输出前切换 |
 | 提示词缓存 | `auto` / `shared` / `off` 三种 key，压缩后轮换，带命中率路由 |
-| 界面 | 输入框额度面板、设置 → Mistral Pro |
+| 界面 | 侧边栏额度卡片、统计面板、设置 → Mistral Pro |
 | 传输 | 原生 `node:https`，可选用 `fetch` 路径 |
 
 ## 为什么用这个插件
@@ -123,15 +123,20 @@ API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页�
 
 `mistral-large-2512`、`devstral-2512`、`mistral-medium-2508` 默认隐藏，需要时可在模型列表中开启。
 
-## 额度面板
+## 侧边栏额度卡片与统计面板
 
-插件会在输入框工具栏添加一个 `● Mistral` 按钮，点击可查看：
+插件会在侧边栏底部（设置旁）添加一张卡片，把两个 Mistral 钱包——Vibe 预算和 API 预算——合并成一个数字，并用双色条展示：灰色代表 Vibe，主文字色代表 API。百分比是两者的合计消耗（`已用 / 总额`），因此不会再出现 API 钱包在消耗、卡片却显示 0% 的情况。
 
-- 各周期额度的使用比例、已用 / 总量及重置倒计时；
-- 预付余额与当月 API 账单消耗；
-- 手动刷新按钮与上次更新时间。
+点击卡片打开统计面板：
 
-按钮上默认展示第一个匹配 `Vibe`、`monthly` 或 `plan` 的额度窗口。页面切到后台时暂停轮询，切回前台时立即刷新。
+- 每个钱包的已用 / 总额、百分比与重置倒计时；
+- 预付余额与当月 API 消耗；
+- 合计总额；
+- 提示词缓存统计：稳态命中率、逐请求分布、容灾次数与最近一次请求；
+- 已配置账号与模型数量；
+- 手动刷新与最后更新时间。
+
+显示方式由 **设置 → Mistral Pro → 额度 → 侧边栏卡片显示** 控制：`auto` 在配置了账号时显示，`always` 常驻，`off` 隐藏。页面切到后台时暂停轮询，切回前台立即刷新。
 
 额度数据来自 `api.mistral.ai/v1/billing/budget`，用你保存的 API Key 直接读取，不需要额外配置。接口返回 Vibe 和 API 两个月度预算：已用百分比、预算金额、重置时间。
 
@@ -213,10 +218,11 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 
 - **账号**：增删、排序、启停、写入 Key（保存并启用）、连通性测试。
 - **模型**：显示开关、上下文窗口、最大输出、默认思考强度。
+- **额度**：侧边栏卡片显示（`auto` / `always` / `off`）、刷新间隔、余额、提示词缓存区块，以及可选的 Cookie 兜底。
 - **高级**：自动容灾、冷却、超时、目录刷新、输出上限、提示词缓存 key、缓存亲和性、流式用量上报、传输方式、代理、按钮显示模式、刷新间隔，以及可选的 Cookie 兜底。
   - **发送 x-affinity**（`cache.affinity`，默认开启）：把缓存 key 作为 `x-affinity` 发送；这是一个未公开、未经验证的缓存路由提示（见[提示词缓存](#提示词缓存)）。
   - **上报流式用量**（`cache.reportUsage`，默认开启）：发送 `stream_options.include_usage`；关闭它也会隐藏 `cachedTokens` 计数。
-  - **显示 Prompt 缓存命中率**（`usage.showCache`，默认开启）：输入框额度面板中读取 `/cache` 的那一块，展示命中率、缓存 / 总 prompt token 以及最近一次请求。
+  - **显示 Prompt 缓存命中率**（`usage.showCache`，默认开启）：统计面板中读取 `/cache` 的那一块，展示命中率、缓存 / 总 prompt token 以及最近一次请求。
   - **传输方式**（`advanced.transport`，默认 `https`）：`https` 通过 `node:https` 发送已序列化的 body；`fetch` 走 `globalThis.fetch`，让进程内的包装层能看到并改写请求。
 
 ![DeepSeek Harness 中的 Mistral Pro 设置页：账号、模型与高级设置](docs/images/settings-zh.png)
@@ -277,7 +283,7 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 
 ### 和 `01NGVI-QINGYI/dsh-mistral-pro` 有什么区别？
 
-上游停在 `0.1.2`。本 fork 合并了建立在其上的两条独立修复线，加入 CI 与回归套件，并提供原生 `node:https` 传输、提示词缓存 key 模式、额度面板和调试路由。两个仓库的版本号不可比较——见[分支来源与上游同步](#分支来源与上游同步)。
+上游停在 `0.1.2`。本 fork 合并了建立在其上的两条独立修复线，加入 CI 与回归套件，并提供原生 `node:https` 传输、提示词缓存 key 模式、侧边栏额度卡片、统计面板和调试路由。两个仓库的版本号不可比较——见[分支来源与上游同步](#分支来源与上游同步)。
 
 ## 数据与隐私
 

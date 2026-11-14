@@ -4,6 +4,23 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.6.0
+
+### Sidebar usage card and statistics panel
+
+- **The composer usage pill is gone.** It showed only the Vibe budget, so it read 0% while the API wallet
+  was being spent. The plugin now adds a card to the sidebar footer (`sidebar.footer.action`), in the same
+  slot as Command Code.
+- **One combined figure.** The card sums the used amounts and the budgets of both wallets and reports their
+  ratio, with a two-colour bar: Vibe in `--dsw-alias-label-tertiary`, API in `--dsw-alias-label-primary`.
+- **Click opens a statistics panel** in the layout's `main` slot: both wallets with reset countdowns,
+  prepaid credits, month-to-date spend, the combined total, prompt-cache statistics (steady state,
+  distribution, failovers, last request), configured accounts and the model count.
+- **Settings.** `usage.display` now controls the sidebar card (`auto` / `always` / `off`);
+  `usage.showCache` controls the cache card in the panel.
+- **Cleanup.** Removed the `conversation.input.right` and `shell.overlay` registrations, the old popover,
+  and the now-unused `@deepseek-ai/dsh-client-ui-conversation` client inject.
+
 ## 0.5.0
 
 ### Cache observability

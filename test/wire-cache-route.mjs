@@ -51,7 +51,7 @@ check(
 check(
   'the aggregate has exactly the documented top-level keys',
   JSON.stringify(Object.keys(aggregate).sort()) ===
-    '["cachedTokens","distribution","hitRate","promptTokens","recent","requests","steadyState"]',
+    '["cachedTokens","coldAfterFailover","distribution","failovers","hitRate","promptTokens","recent","requests","steadyState"]',
   JSON.stringify(Object.keys(aggregate)),
 )
 

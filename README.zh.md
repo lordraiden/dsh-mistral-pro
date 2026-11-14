@@ -2,7 +2,7 @@
 
 **在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）中接入 Mistral 订阅（Vibe Pro / Team）的模型提供方插件。** 提供 `mistral-pro` 模型路由、多账号故障切换、提示词缓存调优，以及输入框工具栏的订阅额度面板。
 
-![version](https://img.shields.io/badge/version-0.4.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.4.1-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 

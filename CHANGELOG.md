@@ -4,6 +4,16 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.8.1
+
+### Fixed
+
+- **The Mistral Pro settings section no longer renders blank.** `applyRouting` was added as a
+  `useCallback` below the settings component's loading/error early returns, so the hook count changed
+  between the loading render and the ready render and React threw
+  `Rendered more hooks than during the previous render`. It is now a plain function, which is safe
+  because it is only used from click handlers. Covered by `test/settings-hooks.mjs`.
+
 ## 0.8.0
 
 ### Routing

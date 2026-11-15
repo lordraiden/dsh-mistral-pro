@@ -863,22 +863,24 @@ window.__ModuleLoader__.load({
 
       // Routing saves immediately: the priority also reorders the two key
       // accounts so the account list below never contradicts the choice.
-      const applyRouting = useCallback(
-        async (patch) => {
-          const nextAdvanced = { ...draft.advanced, ...patch }
-          let nextAccounts = draft.accounts
-          if (patch.priority !== undefined && patch.priority !== 'auto') {
-            const first = patch.priority === 'studio-first' ? 'Studio' : 'Vibe'
-            const second = first === 'Vibe' ? 'Studio' : 'Vibe'
-            const rank = (account) => (account.name === first ? 0 : account.name === second ? 1 : 2)
-            nextAccounts = [...draft.accounts].sort((left, right) => rank(left) - rank(right))
-            setAccounts(nextAccounts)
-          }
-          setAdvanced(nextAdvanced)
-          await update({ advanced: nextAdvanced, accounts: serializeKeyAccounts(nextAccounts) }, t('routingSaved'))
-        },
-        [draft.advanced, draft.accounts, update, t],
-      )
+      //
+      // This is a plain function, not a useCallback: it sits after the early
+      // returns above, so a hook here would change the hook count between the
+      // loading render and the ready render and React would throw, leaving the
+      // whole settings section blank.
+      const applyRouting = async (patch) => {
+        const nextAdvanced = { ...draft.advanced, ...patch }
+        let nextAccounts = draft.accounts
+        if (patch.priority !== undefined && patch.priority !== 'auto') {
+          const first = patch.priority === 'studio-first' ? 'Studio' : 'Vibe'
+          const second = first === 'Vibe' ? 'Studio' : 'Vibe'
+          const rank = (account) => (account.name === first ? 0 : account.name === second ? 1 : 2)
+          nextAccounts = [...draft.accounts].sort((left, right) => rank(left) - rank(right))
+          setAccounts(nextAccounts)
+        }
+        setAdvanced(nextAdvanced)
+        await update({ advanced: nextAdvanced, accounts: serializeKeyAccounts(nextAccounts) }, t('routingSaved'))
+      }
 
       const setModel = (id, patch) =>
         setState((current) => ({

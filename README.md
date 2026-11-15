@@ -186,7 +186,7 @@ API.
 
 Account failover only triggers before the stream emits content:
 
-- On 401 / 403, 429, quota exhaustion, or a missing/invalid key, the adapter switches to the next account
+- On 401 / 403, 402 (API budget exhausted), 429, quota exhaustion, or a missing/invalid key, the adapter switches to the next account
   and places the failed one on a 300-second in-memory cooldown.
 - Once text, reasoning, or a tool call has been emitted, errors are surfaced directly without switching
   accounts so partial responses from different accounts are never mixed.

@@ -4,6 +4,14 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## Unreleased
+
+### Fixed
+
+- **Mistral's 402 `billing_api_budget_exhausted` is classified as QUOTA.** It used to fall through to
+  INVALID_REQUEST, so the adapter neither failed over to the next account nor reported a quota condition.
+  Covered by `test/error-classification.mjs`.
+
 ## 0.6.1
 
 ### Packaging

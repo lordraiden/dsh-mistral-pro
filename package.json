@@ -1,6 +1,6 @@
 {
   "name": "dsh-mistral-pro",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Mistral subscription (Vibe Pro/Team) provider for DeepSeek Harness: multi-account failover, model catalog, sidebar usage card, statistics panel and settings page.",
   "icon": "icon.svg",
   "type": "module",
@@ -70,10 +70,10 @@
   "author": "01NGVI-QINGYI",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/01NGVI-QINGYI/dsh-mistral-pro.git"
+    "url": "git+https://github.com/lordraiden/dsh-mistral-pro.git"
   },
-  "homepage": "https://github.com/01NGVI-QINGYI/dsh-mistral-pro#readme",
+  "homepage": "https://github.com/lordraiden/dsh-mistral-pro#readme",
   "bugs": {
-    "url": "https://github.com/01NGVI-QINGYI/dsh-mistral-pro/issues"
+    "url": "https://github.com/lordraiden/dsh-mistral-pro/issues"
   }
 }

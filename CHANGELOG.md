@@ -4,6 +4,14 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.6.1
+
+### Packaging
+
+- **`repository`, `homepage` and `bugs` now point at the fork.** They still named the upstream
+  `01NGVI-QINGYI/dsh-mistral-pro`, so a Git-source install failed the dshopen.org identity check and an
+  npm publish would have been mapped to the upstream repository. No runtime change.
+
 ## 0.6.0
 
 ### Sidebar usage card and statistics panel

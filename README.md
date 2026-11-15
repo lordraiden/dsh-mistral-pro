@@ -2,7 +2,7 @@
 
 **Mistral subscription (Vibe Pro / Team) provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).** Adds the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a sidebar usage card with a statistics panel.
 
-![version](https://img.shields.io/badge/version-0.7.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.8.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -140,6 +140,18 @@ advanced account list stays available for more than two accounts or custom endpo
 
 > **Terms of service.** Using the Vibe key outside the official Vibe CLI may not be permitted by Mistral.
 > Whether to do it is your decision; the plugin never ships or bundles keys.
+
+### Routing
+
+**Settings → Mistral Pro → Routing** decides which key is tried first and whether a failure falls back:
+
+- **Vibe first** / **Studio first** — the named key is always tried first; a fallback is never promoted.
+- **Automatic** — the account that last worked is promoted for the rest of the process.
+- **Automatic account failover** — when off, only the first key is used and a failure surfaces instead of
+  switching keys.
+
+Changing the priority also reorders the Vibe and Studio accounts, so the account list below never
+contradicts it; their reorder arrows are disabled there.
 
 ## Models
 

@@ -129,5 +129,18 @@
     "combinedTotal": "Combined total",
     "resets": "Resets in {when}",
     "unavailable": "Usage unavailable"
+  },
+  "routing": {
+    "title": "Routing",
+    "hint": "Which key is tried first, and whether a failed key falls back to the other.",
+    "priority": "Consumption priority",
+    "vibeFirst": "Vibe first",
+    "studioFirst": "Studio first",
+    "auto": "Automatic",
+    "priorityHint": "Vibe first and Studio first keep that order and never promote a fallback. Automatic promotes the account that last worked.",
+    "fallback": "Automatic account failover",
+    "fallbackHint": "When the first key is out of budget or rate-limited, try the other before failing.",
+    "saved": "Routing saved.",
+    "orderHint": "Vibe and Studio order is set by Routing; other accounts keep their own order."
   }
 }

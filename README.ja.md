@@ -2,7 +2,7 @@
 
 **DeepSeek Harness（DSH）で Mistral のサブスクリプション（Vibe Pro / Team）を使うためのモデルプロバイダープラグインです。** `mistral-pro` モデルルート、複数アカウントのフェイルオーバー、プロンプトキャッシュのチューニング、入力欄ツールバーの使用量パネルを提供します。
 
-![version](https://img.shields.io/badge/version-0.7.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.8.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -119,6 +119,16 @@ API キーは [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) か�
 各行にはパスワード欄、**Save**、**Test** があり、キーが設定済みかどうかを表示します。**Save** はキーを DSH のクレデンシャルストアに保存し、対応するアカウント（`Vibe` または `Studio`）を作成または更新します。ほかのアカウントが登録されていても、Vibe が先頭、Studio が 2 番目になるよう並びます。**Test** はそのアカウントで `/v1/models` を 1 回呼び出します。キーの値が再表示されたりログに残ったりすることはありません。
 
 リクエストはまず Vibe に送られます。Vibe が 402（予算の枯渇）または 429（レート制限）を返すと、アダプターは最初のストリーム出力より前に Studio へフェイルオーバーし、失敗したアカウントは 300 秒間クールダウンします。3 つ以上のアカウントや独自エンドポイントが必要な場合は、従来のアカウント一覧をそのまま使えます。
+
+### ルーティング
+
+**Settings → Mistral Pro → ルーティング** で、どちらのキーを先に試すか、失敗時に切り替えるかを決めます:
+
+- **Vibe 優先** / **Studio 優先** — 指定したキーを常に先に試し、フォールバックを昇格しません。
+- **自動** — 最後に成功したアカウントをプロセス終了まで先頭に昇格します。
+- **アカウントの自動フェイルオーバー** — オフにすると最初のキーだけを使い、失敗時は切り替えずにエラーを返します。
+
+優先順位を変えると Vibe と Studio のアカウント順も入れ替わるため、下のアカウント一覧と矛盾しません。この 2 つの並べ替え矢印は無効になります。
 
 > **利用規約について。** 公式の Vibe CLI 以外で Vibe キーを使うことは、Mistral の規約で許可されていない可能性があります。どうするかは利用者の判断です。プラグインがキーを同梱・配布することはありません。
 

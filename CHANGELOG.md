@@ -4,6 +4,20 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.8.0
+
+### Routing
+
+- **Consumption priority.** `advanced.priority` selects `vibe-first`, `studio-first` or `auto`. The fixed
+  modes pin the two key accounts and never promote a fallback; `auto` keeps the account that last worked
+  first.
+- **Automatic fallback is now wired.** `advanced.failover` was stored but never read; turning it off now
+  returns only the first account, so a failure surfaces instead of switching keys.
+- **Settings → Routing** exposes both controls next to the two key rows; changing the priority reorders
+  the Vibe/Studio accounts so the account list never contradicts it, and their reorder arrows are
+  disabled.
+- Covered by `test/routing.mjs`.
+
 ## 0.7.0
 
 ### Two keys in Settings

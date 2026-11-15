@@ -129,5 +129,18 @@
     "combinedTotal": "合计",
     "resets": "{when}后重置",
     "unavailable": "额度不可用"
+  },
+  "routing": {
+    "title": "路由",
+    "hint": "先尝试哪把 Key，以及失败后是否切换到另一把。",
+    "priority": "消费优先级",
+    "vibeFirst": "Vibe 优先",
+    "studioFirst": "Studio 优先",
+    "auto": "自动",
+    "priorityHint": "Vibe 优先和 Studio 优先会固定该顺序，不会把备用账号提升为主账号；自动模式会提升最近成功的账号。",
+    "fallback": "自动切换备用账号",
+    "fallbackHint": "第一把 Key 额度耗尽或被限流时，先尝试另一把再报错。",
+    "saved": "路由已保存。",
+    "orderHint": "Vibe 与 Studio 的顺序由「路由」决定；其他账号保持自己的顺序。"
   }
 }

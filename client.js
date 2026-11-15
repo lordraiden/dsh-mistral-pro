@@ -96,6 +96,15 @@ window.__ModuleLoader__.load({
       refresh: 'Refresh',
       advancedTitle: 'Advanced',
       failover: 'Automatic account failover',
+      routingTitle: 'Routing',
+      routingHint: 'Which key is tried first, and whether a failed key falls back to the other.',
+      priorityVibe: 'Vibe first',
+      priorityStudio: 'Studio first',
+      priorityAuto: 'Automatic',
+      priorityHint: 'Vibe first and Studio first keep that order and never promote a fallback. Automatic promotes the account that last worked.',
+      fallbackHint: 'When the first key is out of budget or rate-limited, try the other before failing.',
+      routingSaved: 'Routing saved.',
+      routingOrderHint: 'Vibe and Studio order is set by Routing; other accounts keep their own order.',
       cooldown: 'Failed-account cooldown (seconds)',
       requestTimeout: 'Request timeout (ms)',
       streamIdle: 'Stream idle timeout (ms)',
@@ -231,6 +240,15 @@ window.__ModuleLoader__.load({
       refresh: '刷新',
       advancedTitle: '高级设置',
       failover: '自动切换备用账号',
+      routingTitle: '路由',
+      routingHint: '先尝试哪把 Key，以及失败后是否切换到另一把。',
+      priorityVibe: 'Vibe 优先',
+      priorityStudio: 'Studio 优先',
+      priorityAuto: '自动',
+      priorityHint: 'Vibe 优先和 Studio 优先会固定该顺序，不会把备用账号提升为主账号；自动模式会提升最近成功的账号。',
+      fallbackHint: '第一把 Key 额度耗尽或被限流时，先尝试另一把再报错。',
+      routingSaved: '路由已保存。',
+      routingOrderHint: 'Vibe 与 Studio 的顺序由「路由」决定；其他账号保持自己的顺序。',
       cooldown: '失败账号冷却（秒）',
       requestTimeout: '请求超时（毫秒）',
       streamIdle: '流空闲超时（毫秒）',
@@ -361,6 +379,15 @@ window.__ModuleLoader__.load({
       refresh: '更新',
       advancedTitle: '詳細設定',
       failover: 'アカウントの自動フェイルオーバー',
+      routingTitle: 'ルーティング',
+      routingHint: 'どちらのキーを先に試すか、失敗時に切り替えるか。',
+      priorityVibe: 'Vibe 優先',
+      priorityStudio: 'Studio 優先',
+      priorityAuto: '自動',
+      priorityHint: 'Vibe 優先と Studio 優先はその順序を固定し、フォールバックを昇格しません。自動は最後に成功したアカウントを昇格します。',
+      fallbackHint: '最初のキーが予算切れかレート制限のとき、エラーにする前に別のキーを試します。',
+      routingSaved: 'ルーティングを保存しました。',
+      routingOrderHint: 'Vibe と Studio の順序は「ルーティング」で決まります。他のアカウントは独自の順序を保ちます。',
       cooldown: '失敗アカウントのクールダウン（秒）',
       requestTimeout: 'リクエストタイムアウト（ms）',
       streamIdle: 'ストリームのアイドルタイムアウト（ms）',
@@ -834,6 +861,25 @@ window.__ModuleLoader__.load({
       const saveUsage = () => update({ usage: draft.usage }, t('saved'))
       const saveAdvanced = () => update({ advanced: draft.advanced, usage: draft.usage, cache: draft.cache }, t('advancedSaved'))
 
+      // Routing saves immediately: the priority also reorders the two key
+      // accounts so the account list below never contradicts the choice.
+      const applyRouting = useCallback(
+        async (patch) => {
+          const nextAdvanced = { ...draft.advanced, ...patch }
+          let nextAccounts = draft.accounts
+          if (patch.priority !== undefined && patch.priority !== 'auto') {
+            const first = patch.priority === 'studio-first' ? 'Studio' : 'Vibe'
+            const second = first === 'Vibe' ? 'Studio' : 'Vibe'
+            const rank = (account) => (account.name === first ? 0 : account.name === second ? 1 : 2)
+            nextAccounts = [...draft.accounts].sort((left, right) => rank(left) - rank(right))
+            setAccounts(nextAccounts)
+          }
+          setAdvanced(nextAdvanced)
+          await update({ advanced: nextAdvanced, accounts: serializeKeyAccounts(nextAccounts) }, t('routingSaved'))
+        },
+        [draft.advanced, draft.accounts, update, t],
+      )
+
       const setModel = (id, patch) =>
         setState((current) => ({
           ...current,
@@ -892,6 +938,47 @@ window.__ModuleLoader__.load({
           }),
         ),
 
+        // Routing: which key is tried first and whether a failure falls back.
+        h(
+          'section',
+          { style: S.card },
+          h('h3', { style: S.title }, t('routingTitle')),
+          h('p', { style: S.hint }, t('routingHint')),
+          h(
+            'div',
+            { style: { ...S.row, gap: 6, marginTop: 10, flexWrap: 'wrap' } },
+            [
+              ['vibe-first', 'priorityVibe'],
+              ['studio-first', 'priorityStudio'],
+              ['auto', 'priorityAuto'],
+            ].map(([value, labelKey]) =>
+              h(
+                'button',
+                {
+                  key: value,
+                  style: draft.advanced.priority === value ? S.primary : S.button,
+                  disabled: busy,
+                  onClick: () => void applyRouting({ priority: value }),
+                },
+                t(labelKey),
+              ),
+            ),
+          ),
+          h('p', { style: S.hint }, t('priorityHint')),
+          h(
+            'label',
+            { style: { ...S.row, gap: 6, marginTop: 10 } },
+            h('input', {
+              type: 'checkbox',
+              checked: draft.advanced.failover !== false,
+              disabled: busy,
+              onChange: (event) => void applyRouting({ failover: event.target.checked }),
+            }),
+            t('failover'),
+          ),
+          h('p', { style: S.hint }, t('fallbackHint')),
+        ),
+
         // Accounts
         h(
           'section',
@@ -947,7 +1034,7 @@ window.__ModuleLoader__.load({
                 h('button', { style: S.button, disabled: testing[account.name] === true, onClick: () => void testAccount(account.name) }, testing[account.name] ? t('testing') : t('test')),
                 h('button', {
                   style: S.button,
-                  disabled: index === 0,
+                  disabled: account.name === 'Vibe' || account.name === 'Studio' || index === 0,
                   onClick: () => {
                     const next = [...accounts]
                     ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
@@ -956,7 +1043,7 @@ window.__ModuleLoader__.load({
                 }, '↑'),
                 h('button', {
                   style: S.button,
-                  disabled: index === accounts.length - 1,
+                  disabled: account.name === 'Vibe' || account.name === 'Studio' || index === accounts.length - 1,
                   onClick: () => {
                     const next = [...accounts]
                     ;[next[index + 1], next[index]] = [next[index], next[index + 1]]
@@ -967,6 +1054,7 @@ window.__ModuleLoader__.load({
               ),
             ),
           ),
+          h('p', { style: S.hint }, t('routingOrderHint')),
           h(
             'div',
             { style: { ...S.row, marginTop: 10 } },
@@ -1094,11 +1182,6 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 8 } },
-            h(Field, { label: t('failover') }, h('input', {
-              type: 'checkbox',
-              checked: draft.advanced.failover !== false,
-              onChange: (event) => setAdvanced({ failover: event.target.checked }),
-            })),
             h(Field, { label: t('cooldown') }, h('input', {
               style: S.input,
               type: 'number',

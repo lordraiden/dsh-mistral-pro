@@ -2,7 +2,7 @@
 
 **在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）中接入 Mistral 订阅（Vibe Pro / Team）的模型提供方插件。** 提供 `mistral-pro` 模型路由、多账号故障切换、提示词缓存调优，以及侧边栏额度卡片与统计面板。
 
-![version](https://img.shields.io/badge/version-0.7.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.8.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -119,6 +119,16 @@ API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页�
 每行都有密码框、「保存」和「测试」按钮，并显示该 Key 是否已配置。「保存」会把 Key 写入 DSH 凭据存储，并创建或更新对应账号（`Vibe` 或 `Studio`），同时保持 Vibe 在前、Studio 在后——即使你已经配置了其他账号。「测试」会对该账号调用一次 `/v1/models`。Key 的值之后不会再显示，也不会写入日志。
 
 请求优先走 Vibe。当 Vibe 返回 402（预算耗尽）或 429（限流）时，适配器会在首个流式 token 之前切换到 Studio，失败的账号冷却 300 秒。需要两个以上账号或自定义端点时，仍可使用高级账号列表。
+
+### 路由
+
+**设置 → Mistral Pro → 路由** 决定先尝试哪把 Key，以及失败后是否切换：
+
+- **Vibe 优先** / **Studio 优先**——始终先试指定的 Key，不会把备用账号提升为主账号。
+- **自动**——把最近成功的账号提升到首位，直到进程重启。
+- **自动切换备用账号**——关闭时只使用第一把 Key，失败直接报错，不切换。
+
+修改优先级会同时调整 Vibe 与 Studio 的账号顺序，下方账号列表不会与之矛盾；这两个账号的排序箭头会被禁用。
 
 > **服务条款提醒。** 在官方 Vibe CLI 之外使用 Vibe Key 可能不被 Mistral 允许。是否这样做由你决定；插件不附带、也不分发任何 Key。
 

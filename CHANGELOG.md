@@ -4,6 +4,22 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## Unreleased
+
+### Two keys in Settings
+
+- **Settings → Mistral Pro → Keys.** Two rows — **Vibe API key** (`MISTRAL_VIBE_KEY`, account `Vibe`,
+  primary) and **Studio API key** (`MISTRAL_API_KEY`, account `Studio`, fallback) — each with Save and
+  Test. Saving upserts the account and keeps Vibe before Studio; when Vibe answers 402 or 429 the adapter
+  fails over to Studio. The key value is never shown again and never logged.
+
+### Cache statistics
+
+- **The six distribution rows are replaced.** The cache card now shows a stacked mix bar of the
+  per-request hit-rate ranges with a compact counter legend, a sparkline of the last 20 requests (height is
+  the hit rate, colour is the range, the tooltip shows model and percentage) and a one-line summary such as
+  `18 of 20 requests ≥ 76% · 2 cold starts`. The remaining cache figures are unchanged.
+
 ## 0.6.2
 
 ### Fixed

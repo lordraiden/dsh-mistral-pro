@@ -7,6 +7,15 @@
     "title": "Mistral Pro",
     "subtitle": "Mistral subscription accounts, models and usage"
   },
+  "keys": {
+    "title": "Keys",
+    "hint": "Paste each key once. Vibe is tried first, Studio second; extra accounts and custom base URLs stay under Accounts.",
+    "vibe": "Vibe API key",
+    "studio": "Studio API key",
+    "configured": "configured",
+    "missing": "not configured",
+    "save": "Save"
+  },
   "accounts": {
     "title": "Accounts",
     "hint": "Requests try accounts from top to bottom. A key that fails authentication, rate limiting or quota is skipped before any text is produced.",
@@ -83,7 +92,10 @@
     "requests": "Requests",
     "failovers": "Failovers",
     "coldAfterFailover": "Cold after failover",
-    "distribution": "Distribution",
+    "mix": "Hit-rate mix",
+    "recent": "Last 20 requests",
+    "summary": "{high} of {total} requests ≥ 76% · {cold} cold starts",
+    "sparkTitle": "{model} · {rate}",
     "steady": "steady state"
   },
   "advanced": {

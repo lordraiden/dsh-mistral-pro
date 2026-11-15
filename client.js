@@ -22,6 +22,14 @@ window.__ModuleLoader__.load({
     const EN = {
       sectionTitle: 'Mistral Pro',
       sectionSubtitle: 'Mistral subscription accounts, models and usage',
+      keysTitle: 'Keys',
+      keysHint:
+        'Paste each key once. Vibe is tried first, Studio second; extra accounts and custom base URLs stay under Accounts.',
+      keyVibeLabel: 'Vibe API key',
+      keyStudioLabel: 'Studio API key',
+      keyStatusConfigured: 'configured',
+      keyStatusMissing: 'not configured',
+      saveKey: 'Save',
       accountsTitle: 'Accounts',
       accountsHint:
         'Requests try accounts from top to bottom. A key that fails authentication, rate limiting or quota is skipped before any text is produced.',
@@ -138,7 +146,10 @@ window.__ModuleLoader__.load({
       cacheRequests: 'Requests',
       cacheFailovers: 'Failovers',
       cacheColdAfterFailover: 'Cold after failover',
-      cacheDistribution: 'Distribution',
+      cacheMix: 'Hit-rate mix',
+      cacheRecent: 'Last 20 requests',
+      cacheSummary: '{high} of {total} requests ≥ 76% · {cold} cold starts',
+      cacheSparkTitle: '{model} · {rate}',
       cacheSteady: 'steady state',
       windowVibe: 'Vibe budget',
       windowApi: 'API budget',
@@ -148,6 +159,13 @@ window.__ModuleLoader__.load({
     const ZH = {
       sectionTitle: 'Mistral Pro',
       sectionSubtitle: 'Mistral 订阅账号、模型与额度',
+      keysTitle: '密钥',
+      keysHint: '每个 Key 只需粘贴一次。Vibe 优先，Studio 其次；其他账号与自定义接口地址仍在“账号”中管理。',
+      keyVibeLabel: 'Vibe API Key',
+      keyStudioLabel: 'Studio API Key',
+      keyStatusConfigured: '已配置',
+      keyStatusMissing: '未配置',
+      saveKey: '保存',
       accountsTitle: '账号',
       accountsHint: '请求按从上到下的顺序尝试。鉴权失败、限流或额度耗尽的 Key 会在开始输出文字前被跳过。',
       accountsEmpty: '还没有账号，添加一个即可使用 Mistral 模型。',
@@ -263,7 +281,10 @@ window.__ModuleLoader__.load({
       cacheRequests: '请求数',
       cacheFailovers: '故障切换',
       cacheColdAfterFailover: '切换后冷启动',
-      cacheDistribution: '分布',
+      cacheMix: '命中率分布',
+      cacheRecent: '最近 20 次请求',
+      cacheSummary: '{total} 次请求中 {high} 次 ≥ 76% · {cold} 次冷启动',
+      cacheSparkTitle: '{model} · {rate}',
       cacheSteady: '稳态',
       windowVibe: 'Vibe 额度',
       windowApi: 'API 额度',
@@ -273,6 +294,13 @@ window.__ModuleLoader__.load({
     const JA = {
       sectionTitle: 'Mistral Pro',
       sectionSubtitle: 'Mistral サブスクリプションのアカウント・モデル・使用量',
+      keysTitle: 'キー',
+      keysHint: '各キーは一度貼り付けるだけです。Vibe が先、Studio が次に試され、その他のアカウントとカスタム URL は「アカウント」で管理します。',
+      keyVibeLabel: 'Vibe API キー',
+      keyStudioLabel: 'Studio API キー',
+      keyStatusConfigured: '設定済み',
+      keyStatusMissing: '未設定',
+      saveKey: '保存',
       accountsTitle: 'アカウント',
       accountsHint:
         'リクエストは上から順に試されます。認証失敗・レート制限・枠の枯渇が起きたキーは、出力が始まる前にスキップされます。',
@@ -389,7 +417,10 @@ window.__ModuleLoader__.load({
       cacheRequests: 'リクエスト数',
       cacheFailovers: 'フェイルオーバー',
       cacheColdAfterFailover: '切替後のコールド',
-      cacheDistribution: '分布',
+      cacheMix: 'ヒット率の分布',
+      cacheRecent: '直近 20 リクエスト',
+      cacheSummary: '{total} 件中 {high} 件が 76% 以上 · コールドスタート {cold} 件',
+      cacheSparkTitle: '{model} · {rate}',
       cacheSteady: '定常状態',
       windowVibe: 'Vibe 使用枠',
       windowApi: 'API 使用枠',
@@ -519,6 +550,52 @@ window.__ModuleLoader__.load({
       }))
     }
 
+    /**
+     * The two first-class keys: account name, credential ref and label key.
+     * The order here is the order the accounts are written in.
+     */
+    const KEY_ROWS = [
+      { name: 'Vibe', ref: 'MISTRAL_VIBE_KEY', labelKey: 'keyVibeLabel' },
+      { name: 'Studio', ref: 'MISTRAL_API_KEY', labelKey: 'keyStudioLabel' },
+    ]
+
+    /** Canonical order of the two key accounts; mirrors lib/config.js. */
+    const KEY_ACCOUNT_ORDER = ['Vibe', 'Studio']
+
+    /**
+     * Create or update one of the two key accounts, returning a new array.
+     *
+     * The browser bundle cannot import the server ESM module, so this mirrors
+     * `upsertKeyAccount` in lib/config.js (which test/key-accounts.mjs pins):
+     * the key accounts lead in Vibe, Studio order and every other account
+     * keeps its relative order. The input is never mutated.
+     */
+    function upsertKeyAccount(accounts, { name, ref }) {
+      const list = Array.isArray(accounts) ? accounts : []
+      const index = list.findIndex((account) => account?.name === name)
+      const entry =
+        index === -1
+          ? { name, apiKeyEnv: ref, baseURL: '', enabled: true }
+          : { ...list[index], name, apiKeyEnv: ref, enabled: true }
+      const next = index === -1 ? [...list, entry] : list.map((account, position) => (position === index ? entry : account))
+      const rank = (account) => {
+        const position = KEY_ACCOUNT_ORDER.indexOf(account?.name)
+        return position === -1 ? KEY_ACCOUNT_ORDER.length : position
+      }
+      // Array#sort is stable, so the non-key accounts keep their relative order.
+      return next.sort((left, right) => rank(left) - rank(right))
+    }
+
+    /** Serialize accounts for the settings patch, keeping custom base URLs. */
+    function serializeKeyAccounts(accounts) {
+      return accounts.map((account) => ({
+        name: account.name.trim() === '' ? 'default' : account.name.trim(),
+        apiKeyEnv: account.apiKeyEnv.trim() === '' ? 'MISTRAL_API_KEY' : account.apiKeyEnv.trim(),
+        baseURL: typeof account.baseURL === 'string' ? account.baseURL : '',
+        enabled: account.enabled !== false,
+      }))
+    }
+
     // ── Settings page ────────────────────────────────────────────────────────
 
     function SettingsSection({ ctx, t }) {
@@ -527,6 +604,7 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = useState(null)
       const [busy, setBusy] = useState(false)
       const [keyDraft, setKeyDraft] = useState({})
+      const [keyNotice, setKeyNotice] = useState({})
       const [cookieDraft, setCookieDraft] = useState('')
       const [testing, setTesting] = useState({})
       const [modelQuery, setModelQuery] = useState('')
@@ -539,7 +617,7 @@ window.__ModuleLoader__.load({
           const described = await callRemote(ctx, 'settings', 'describe')
           const view = described.namespaces.find((entry) => entry.ns === meta.settingsNs)
           const value = view?.value ?? {}
-          const refs = new Set([meta.usage.adminCookieEnv, 'MISTRAL_API_KEY'])
+          const refs = new Set([meta.usage.adminCookieEnv, 'MISTRAL_API_KEY', 'MISTRAL_VIBE_KEY'])
           for (const account of value.accounts ?? []) if (account?.apiKeyEnv) refs.add(account.apiKeyEnv)
           const creds = await callRemote(ctx, 'credentials', 'describe', Array.from(refs))
           const models = ((await getJSON('/models')).models ?? []).map((model) => ({
@@ -651,6 +729,83 @@ window.__ModuleLoader__.load({
         [t],
       )
 
+      /**
+       * Store one key row: write the credential, then upsert the account in the
+       * persisted settings array (Vibe first, Studio second) and save it. The
+       * key value only ever travels to the credentials Remote; it is never put
+       * into a notice or the rendered output.
+       */
+      const persistKeyRow = useCallback(
+        async (row) => {
+          const value = keyDraft[row.ref]
+          if (typeof value !== 'string' || value.trim() === '') return false
+          await callRemote(ctx, 'credentials', 'set', row.ref, value.trim())
+          if (state.meta !== null) {
+            const next = upsertKeyAccount(state.value?.accounts ?? [], { name: row.name, ref: row.ref })
+            await callRemote(
+              ctx,
+              'settings',
+              'update',
+              state.meta.settingsNs,
+              { accounts: serializeKeyAccounts(next) },
+              state.revision,
+            )
+          }
+          setKeyDraft((current) => ({ ...current, [row.ref]: '' }))
+          return true
+        },
+        [ctx, keyDraft, state.meta, state.revision, state.value],
+      )
+
+      const saveKeyRow = useCallback(
+        async (row) => {
+          setBusy(true)
+          setKeyNotice((current) => ({ ...current, [row.ref]: null }))
+          try {
+            const saved = await persistKeyRow(row)
+            if (!saved) return
+            setKeyNotice((current) => ({ ...current, [row.ref]: { kind: 'ok', text: t('keySaved') } }))
+            await load()
+          } catch (error) {
+            setKeyNotice((current) => ({
+              ...current,
+              [row.ref]: { kind: 'error', text: fill(t('saveFailed'), { message: String(error?.message ?? error) }) },
+            }))
+          } finally {
+            setBusy(false)
+          }
+        },
+        [load, persistKeyRow, t],
+      )
+
+      const testKeyRow = useCallback(
+        async (row) => {
+          setBusy(true)
+          setTesting((current) => ({ ...current, [row.name]: true }))
+          setKeyNotice((current) => ({ ...current, [row.ref]: null }))
+          try {
+            const saved = await persistKeyRow(row)
+            if (saved) await load()
+            const result = await getJSON(`/test?account=${encodeURIComponent(row.name)}`)
+            setKeyNotice((current) => ({
+              ...current,
+              [row.ref]: result.ok
+                ? { kind: 'ok', text: fill(t('testOk'), { count: result.count }) }
+                : { kind: 'error', text: fill(t('testFailed'), { message: result.error?.message ?? 'unknown' }) },
+            }))
+          } catch (error) {
+            setKeyNotice((current) => ({
+              ...current,
+              [row.ref]: { kind: 'error', text: fill(t('testFailed'), { message: String(error?.message ?? error) }) },
+            }))
+          } finally {
+            setTesting((current) => ({ ...current, [row.name]: false }))
+            setBusy(false)
+          }
+        },
+        [load, persistKeyRow, t],
+      )
+
       if (state.status === 'loading') return h('p', { style: S.hint }, t('loading'))
       if (state.status === 'error') return h('p', { style: S.error }, state.error)
       if (draft === null) return h('p', { style: S.hint }, t('loading'))
@@ -691,6 +846,51 @@ window.__ModuleLoader__.load({
         h('h2', { style: { ...S.title, fontSize: 18, marginBottom: 2 } }, t('sectionTitle')),
         h('p', { style: { ...S.hint, marginBottom: 14 } }, t('sectionSubtitle')),
         h(Notice, { notice }),
+
+        // Keys: the two first-class credentials, one row each.
+        h(
+          'section',
+          { style: S.card },
+          h('h3', { style: S.title }, t('keysTitle')),
+          h('p', { style: S.hint }, t('keysHint')),
+          KEY_ROWS.map((row) => {
+            const configured = state.creds[row.ref]?.configured === true
+            const rowNotice = keyNotice[row.ref]
+            return h(
+              'div',
+              { key: row.ref, style: { ...S.card, background: 'var(--dsw-alias-bg-layer-2)', marginTop: 10 } },
+              h(
+                'div',
+                { style: { ...S.row, justifyContent: 'space-between' } },
+                h('span', { style: { color: 'var(--dsw-alias-label-primary)', fontSize: 13, fontWeight: 600 } }, t(row.labelKey)),
+                h('span', { style: configured ? S.ok : S.warn }, configured ? t('keyStatusConfigured') : t('keyStatusMissing')),
+              ),
+              h(
+                'div',
+                { style: { ...S.row, marginTop: 8 } },
+                h('input', {
+                  style: { ...S.input, flex: '1 1 200px', width: 'auto', minWidth: 0 },
+                  type: 'password',
+                  autoComplete: 'off',
+                  placeholder: t('setKey'),
+                  value: keyDraft[row.ref] ?? '',
+                  onChange: (event) => setKeyDraft((current) => ({ ...current, [row.ref]: event.target.value })),
+                }),
+                h('button', {
+                  style: S.primary,
+                  disabled: busy || (keyDraft[row.ref] ?? '').trim() === '',
+                  onClick: () => void saveKeyRow(row),
+                }, t('saveKey')),
+                h('button', {
+                  style: S.button,
+                  disabled: busy || testing[row.name] === true,
+                  onClick: () => void testKeyRow(row),
+                }, testing[row.name] ? t('testing') : t('test')),
+              ),
+              rowNotice ? h('p', { style: rowNotice.kind === 'error' ? S.error : S.ok }, rowNotice.text) : null,
+            )
+          }),
+        ),
 
         // Accounts
         h(
@@ -1127,11 +1327,19 @@ window.__ModuleLoader__.load({
 .mp-tileValue{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:600;line-height:1.4;font-variant-numeric:tabular-nums}
 .mp-tileSub{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.mp-distRow{align-items:center;gap:8px;display:flex;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
-.mp-distLabel{flex:0 0 64px;font-variant-numeric:tabular-nums}
-.mp-distTrack{flex:1;display:block;background:var(--dsw-alias-bg-layer-1);border-radius:999px;height:5px;overflow:hidden}
-.mp-distFill{display:block;height:100%;background:var(--dsw-alias-label-tertiary);border-radius:999px}
-.mp-distCount{flex:0 0 auto;min-width:40px;text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary)}
+.mp-mix{display:flex;background:var(--dsw-alias-bg-layer-1);border-radius:999px;height:10px;overflow:hidden}
+.mp-mixSeg{display:block;height:100%;transition:width .3s ease}
+.mp-bucketError{background:var(--dsw-alias-state-error-primary)}
+.mp-bucketWarn{background:var(--dsw-alias-state-warn-primary)}
+.mp-bucketMid{background:var(--dsw-alias-label-tertiary)}
+.mp-bucketHigh{background:var(--dsw-alias-label-primary)}
+.mp-bucketFull{background:var(--dsw-alias-brand-primary)}
+.mp-legend{display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5}
+.mp-legendItem{display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+.mp-legendDot{flex:none;width:8px;height:8px;border-radius:2px}
+.mp-legendCount{color:var(--dsw-alias-label-tertiary)}
+.mp-spark{display:flex;align-items:flex-end;gap:2px;height:28px;padding:2px 0;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.mp-sparkBar{flex:1 1 0;min-width:2px;max-width:10px;border-radius:2px 2px 0 0}
 
 .mp-accounts{flex-direction:column;display:flex}
 .mp-accountRow{align-items:center;gap:8px;display:flex;flex-wrap:wrap;min-width:0;padding:6px 0;border-bottom:1px solid var(--dsw-alias-border-l1)}
@@ -1142,7 +1350,7 @@ window.__ModuleLoader__.load({
 .mp-badgeWarn{background:transparent;color:var(--dsw-alias-state-warn-primary)}
 .mp-footer{align-items:center;gap:10px;display:flex;flex-wrap:wrap}
 
-@media (prefers-reduced-motion:reduce){.mp-footSeg,.mp-barFill{transition:none}}
+@media (prefers-reduced-motion:reduce){.mp-footSeg,.mp-barFill,.mp-mixSeg{transition:none}}
 `
 
     /** Install one stylesheet by id and return a disposer for its owning effect. */
@@ -1320,7 +1528,32 @@ window.__ModuleLoader__.load({
     /** The Host's hit-rate buckets, in display order. */
     const HIT_RATE_BUCKETS = ['0', '1-25', '26-50', '51-75', '76-99', '100']
 
-    /** The prompt-cache card: steady-state hit rate, volume, distribution, last request. */
+    /** Severity colour class for one hit-rate bucket. */
+    const BUCKET_CLASS = {
+      '0': 'mp-bucketError',
+      '1-25': 'mp-bucketWarn',
+      '26-50': 'mp-bucketWarn',
+      '51-75': 'mp-bucketMid',
+      '76-99': 'mp-bucketHigh',
+      '100': 'mp-bucketFull',
+    }
+
+    function bucketClass(bucket) {
+      return BUCKET_CLASS[bucket] ?? 'mp-bucketMid'
+    }
+
+    /** Bucket a 0-1 hit rate exactly like lib/wire.js does. */
+    function bucketForRate(rate) {
+      const percent = rate * 100
+      if (percent <= 0) return '0'
+      if (percent >= 100) return '100'
+      if (percent <= 25) return '1-25'
+      if (percent <= 50) return '26-50'
+      if (percent <= 75) return '51-75'
+      return '76-99'
+    }
+
+    /** The prompt-cache card: steady-state hit rate, volume, mix, sparkline, last request. */
     function CacheCard({ t, cache, cacheError }) {
       const unavailable = cacheError !== null || (cache !== null && cache.ok === false)
       const steady = cache?.steadyState
@@ -1341,6 +1574,9 @@ window.__ModuleLoader__.load({
         return (leftIndex === -1 ? HIT_RATE_BUCKETS.length : leftIndex) - (rightIndex === -1 ? HIT_RATE_BUCKETS.length : rightIndex)
       })
       const bucketTotal = buckets.reduce((sum, bucket) => sum + (Number.isFinite(distribution[bucket]) ? distribution[bucket] : 0), 0)
+      const bucketCount = (bucket) => (Number.isFinite(distribution[bucket]) ? distribution[bucket] : 0)
+      const nonEmptyBuckets = buckets.filter((bucket) => bucketCount(bucket) > 0)
+      const highRequests = bucketCount('76-99') + bucketCount('100')
 
       let body
       if (unavailable) body = h('p', { className: 'mp-hint' }, t('cacheUnavailable'))
@@ -1357,28 +1593,76 @@ window.__ModuleLoader__.load({
             h(Tile, { label: t('cacheColdAfterFailover'), value: formatCount(cache.coldAfterFailover) }),
           ),
           h('p', { className: 'mp-hint' }, fill(t('cacheTokens'), { cached: formatCount(cachedTokens), total: formatCount(promptTokens) })),
-          buckets.length === 0
+          // One stacked bar replaces the six near-identical rows: each segment
+          // is a bucket's share of the measured requests, coloured by severity.
+          bucketTotal === 0
             ? null
             : h(
                 'div',
                 { className: 'mp-block' },
-                h('h4', { className: 'mp-blockTitle' }, t('cacheDistribution')),
-                buckets.map((bucket) =>
-                  h(
-                    'div',
-                    { className: 'mp-distRow', key: bucket },
-                    h('span', { className: 'mp-distLabel' }, `${bucket}%`),
-                    h(
-                      'span',
-                      { className: 'mp-distTrack' },
-                      h('span', {
-                        className: 'mp-distFill',
-                        style: { width: `${bucketTotal > 0 ? (distribution[bucket] / bucketTotal) * 100 : 0}%` },
-                      }),
-                    ),
-                    h('span', { className: 'mp-distCount' }, formatCount(distribution[bucket])),
+                h('h4', { className: 'mp-blockTitle' }, t('cacheMix')),
+                h(
+                  'div',
+                  { className: 'mp-mix', role: 'img', 'aria-label': t('cacheMix') },
+                  nonEmptyBuckets.map((bucket) =>
+                    h('span', {
+                      key: bucket,
+                      className: `mp-mixSeg ${bucketClass(bucket)}`,
+                      style: { width: `${(bucketCount(bucket) / bucketTotal) * 100}%` },
+                      title: `${bucket}% · ${formatCount(bucketCount(bucket))}`,
+                    }),
                   ),
                 ),
+                h(
+                  'div',
+                  { className: 'mp-legend' },
+                  nonEmptyBuckets.map((bucket) =>
+                    h(
+                      'span',
+                      { key: bucket, className: 'mp-legendItem' },
+                      h('span', { className: `mp-legendDot ${bucketClass(bucket)}` }),
+                      h('span', null, `${bucket}%`),
+                      h('span', { className: 'mp-legendCount' }, formatCount(bucketCount(bucket))),
+                    ),
+                  ),
+                ),
+              ),
+          // One thin bar per recent request, height = its hit rate.
+          recent.length === 0
+            ? null
+            : h(
+                'div',
+                { className: 'mp-block' },
+                h('h4', { className: 'mp-blockTitle' }, t('cacheRecent')),
+                h(
+                  'div',
+                  { className: 'mp-spark', role: 'img', 'aria-label': t('cacheRecent') },
+                  recent.map((entry, index) => {
+                    const rate = typeof entry.hitRate === 'number' && Number.isFinite(entry.hitRate) ? entry.hitRate : null
+                    const percent = rate === null ? 0 : Math.max(0, Math.min(100, rate * 100))
+                    const bucket = rate === null ? '0' : bucketForRate(rate)
+                    return h('span', {
+                      key: `${entry.ts ?? 'entry'}-${index}`,
+                      className: `mp-sparkBar ${bucketClass(bucket)}`,
+                      style: { height: `${percent}%` },
+                      title: fill(t('cacheSparkTitle'), {
+                        model: entry.model ?? '—',
+                        rate: rate === null ? '—' : `${Math.round(percent)}%`,
+                      }),
+                    })
+                  }),
+                ),
+              ),
+          bucketTotal === 0
+            ? null
+            : h(
+                'p',
+                { className: 'mp-hint' },
+                fill(t('cacheSummary'), {
+                  high: formatCount(highRequests),
+                  total: formatCount(bucketTotal),
+                  cold: formatCount(cache.coldAfterFailover),
+                }),
               ),
           lastRequest === undefined
             ? null

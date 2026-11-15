@@ -7,6 +7,15 @@
     "title": "Mistral Pro",
     "subtitle": "Mistral 订阅账号、模型与额度"
   },
+  "keys": {
+    "title": "密钥",
+    "hint": "每个 Key 只需粘贴一次。Vibe 优先，Studio 其次；其他账号与自定义接口地址仍在“账号”中管理。",
+    "vibe": "Vibe API Key",
+    "studio": "Studio API Key",
+    "configured": "已配置",
+    "missing": "未配置",
+    "save": "保存"
+  },
   "accounts": {
     "title": "账号",
     "hint": "请求按从上到下的顺序尝试。鉴权失败、限流或额度耗尽的 Key 会在开始输出文字前被跳过。",
@@ -83,7 +92,10 @@
     "requests": "请求数",
     "failovers": "故障切换",
     "coldAfterFailover": "切换后冷启动",
-    "distribution": "分布",
+    "mix": "命中率分布",
+    "recent": "最近 20 次请求",
+    "summary": "{total} 次请求中 {high} 次 ≥ 76% · {cold} 次冷启动",
+    "sparkTitle": "{model} · {rate}",
     "steady": "稳态"
   },
   "advanced": {

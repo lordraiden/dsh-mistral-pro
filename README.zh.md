@@ -104,6 +104,24 @@ API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页�
 
 配置多个账号时会按列表顺序调用，可用 ↑ / ↓ 调整优先级，排在第一位且已启用的为主账号。触发容灾切换后，可用账号会在当前进程内临时提为首选，不会改动配置文件。
 
+### 两把 Key: Vibe 与 Studio
+
+最常见的配置是「一把 Vibe Key + 一把 Studio Key 兜底」。**设置 → Mistral Pro → 密钥** 为每把 Key 提供一行：
+
+| 行 | 凭据引用 | 账号 | 顺序 |
+| --- | --- | --- | --- |
+| Vibe API Key | `MISTRAL_VIBE_KEY` | `Vibe` | 主账号 |
+| Studio API Key | `MISTRAL_API_KEY` | `Studio` | 备用 |
+
+- **Vibe API Key**：Vibe CLI 使用的那把 Key。执行 `vibe --setup` 后它保存在 `~/.vibe/.env`；也可以在 Code › Extensions → Advanced → Vibe API Key 页面创建。
+- **Studio API Key**：Mistral 管理后台的按量付费 Key，位于 API › API Keys。
+
+每行都有密码框、「保存」和「测试」按钮，并显示该 Key 是否已配置。「保存」会把 Key 写入 DSH 凭据存储，并创建或更新对应账号（`Vibe` 或 `Studio`），同时保持 Vibe 在前、Studio 在后——即使你已经配置了其他账号。「测试」会对该账号调用一次 `/v1/models`。Key 的值之后不会再显示，也不会写入日志。
+
+请求优先走 Vibe。当 Vibe 返回 402（预算耗尽）或 429（限流）时，适配器会在首个流式 token 之前切换到 Studio，失败的账号冷却 300 秒。需要两个以上账号或自定义端点时，仍可使用高级账号列表。
+
+> **服务条款提醒。** 在官方 Vibe CLI 之外使用 Vibe Key 可能不被 Mistral 允许。是否这样做由你决定；插件不附带、也不分发任何 Key。
+
 ## 模型
 
 **设置 → Mistral Pro → 模型** 会合并展示内置模型列表与 `/v1/models` 返回的模型。取消勾选「显示」可从模型选择器中隐藏；上下文窗口、最大输出长度和默认 `reasoning_effort`（思考强度）均可按模型单独调整。
@@ -134,9 +152,11 @@ API Key 可在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页�
 - 每个钱包的已用 / 总额、百分比与重置倒计时；
 - 预付余额与当月 API 消耗；
 - 合计总额；
-- 提示词缓存统计：稳态命中率、逐请求分布、容灾次数与最近一次请求；
+- 提示词缓存统计：稳态命中率、逐请求命中率区间的堆叠混合条、最近 20 次请求的迷你柱状图（sparkline）、一行摘要、容灾次数与最近一次请求；
 - 已配置账号与模型数量；
 - 手动刷新与最后更新时间。
+
+缓存卡片用堆叠混合条（每个区间一段，配一行紧凑的计数图例）取代了原来的六行区间分布，并新增最近 20 次请求的迷你柱状图（每根细柱代表一次请求，高度是命中率，颜色是所属区间，悬停提示显示模型与百分比）和一行摘要，例如 `20 次请求中 18 次 ≥ 76% · 2 次冷启动`。其余缓存数字保持不变。
 
 显示方式由 **设置 → Mistral Pro → 额度 → 侧边栏卡片显示** 控制：`auto` 在配置了账号时显示，`always` 常驻，`off` 隐藏。页面切到后台时暂停轮询，切回前台立即刷新。
 
@@ -218,13 +238,14 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 
 ## 设置项
 
+- **密钥**：Vibe 与 Studio 两行，带「保存」和「测试」（见[两把 Key](#两把-key-vibe-与-studio)）。
 - **账号**：增删、排序、启停、写入 Key（保存并启用）、连通性测试。
 - **模型**：显示开关、上下文窗口、最大输出、默认思考强度。
 - **额度**：侧边栏卡片显示（`auto` / `always` / `off`）、刷新间隔、余额、提示词缓存区块，以及可选的 Cookie 兜底。
 - **高级**：自动容灾、冷却、超时、目录刷新、输出上限、提示词缓存 key、缓存亲和性、流式用量上报、传输方式、代理、按钮显示模式、刷新间隔，以及可选的 Cookie 兜底。
   - **发送 x-affinity**（`cache.affinity`，默认开启）：把缓存 key 作为 `x-affinity` 发送；这是一个未公开、未经验证的缓存路由提示（见[提示词缓存](#提示词缓存)）。
   - **上报流式用量**（`cache.reportUsage`，默认开启）：发送 `stream_options.include_usage`；关闭它也会隐藏 `cachedTokens` 计数。
-  - **显示 Prompt 缓存命中率**（`usage.showCache`，默认开启）：统计面板中读取 `/cache` 的那一块，展示命中率、缓存 / 总 prompt token 以及最近一次请求。
+  - **显示 Prompt 缓存命中率**（`usage.showCache`，默认开启）：统计面板中读取 `/cache` 的那一块，展示命中率、混合条、迷你柱状图、摘要行以及最近一次请求。
   - **传输方式**（`advanced.transport`，默认 `https`）：`https` 通过 `node:https` 发送已序列化的 body；`fetch` 走 `globalThis.fetch`，让进程内的包装层能看到并改写请求。
 
 ![DeepSeek Harness 中的 Mistral Pro 设置页：账号、模型与高级设置](docs/images/settings-zh.png)
@@ -269,7 +290,7 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 
 ### 去哪里创建 Mistral API Key？
 
-在 [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) 页面创建，然后粘贴到 **设置 → Mistral Pro → 账号**。
+Vibe Key 在执行 `vibe --setup` 后位于 `~/.vibe/.env`，也可以在 Code › Extensions → Advanced → Vibe API Key 页面创建；Studio Key 在 Mistral 管理后台的 API › API Keys 页面创建。两把 Key 都粘贴到 **设置 → Mistral Pro → 密钥**，见[两把 Key](#两把-key-vibe-与-studio)。
 
 ### 支持工具调用、思考内容和图片吗？
 

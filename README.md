@@ -115,6 +115,32 @@ Accounts are tried in list order (use ↑ / ↓ to adjust). The first enabled ac
 a failover succeeds, the working account is promoted in memory for the rest of the process lifetime without
 modifying your saved config.
 
+### Two keys: Vibe and Studio
+
+For the common setup — a Vibe key with a Studio key behind it — **Settings → Mistral Pro → Keys** has one
+row per key:
+
+| Row | Credential reference | Account | Order |
+| --- | --- | --- | --- |
+| Vibe API key | `MISTRAL_VIBE_KEY` | `Vibe` | primary |
+| Studio API key | `MISTRAL_API_KEY` | `Studio` | fallback |
+
+- **Vibe API key** — the key the Vibe CLI uses. After `vibe --setup` it is in `~/.vibe/.env`; you can also
+  create one under Code › Extensions → Advanced → Vibe API Key.
+- **Studio API key** — a pay-as-you-go key from the Mistral admin: API › API Keys.
+
+Each row has a password field, **Save** and **Test**, and shows whether the key is configured. **Save**
+stores the key in the DSH credential store and creates or updates its account (`Vibe` or `Studio`), keeping
+Vibe first and Studio second even when other accounts exist. **Test** runs a `/v1/models` check against that
+account. The key value is never shown again and never logged.
+
+Requests go to Vibe first. When Vibe answers 402 (budget exhausted) or 429 (rate limit), the adapter fails
+over to Studio before the first streamed token, and the failed account cools down for 300 seconds. The
+advanced account list stays available for more than two accounts or custom endpoints.
+
+> **Terms of service.** Using the Vibe key outside the official Vibe CLI may not be permitted by Mistral.
+> Whether to do it is your decision; the plugin never ships or bundles keys.
+
 ## Models
 
 **Settings → Mistral Pro → Models** combines the built-in catalog with models returned by `/v1/models`.
@@ -152,9 +178,15 @@ Clicking the card opens the statistics panel:
 - each wallet with its used / total, percentage and reset countdown;
 - prepaid credit balance and current-month API spend;
 - the combined total;
-- prompt-cache statistics: steady-state hit rate, per-request distribution, failovers and the last request;
+- prompt-cache statistics: steady-state hit rate, a stacked mix bar of the per-request hit-rate ranges, a
+  sparkline of the last 20 requests, a one-line summary, failovers and the last request;
 - configured accounts and the model count;
 - manual refresh and last-updated timestamp.
+
+The cache card replaces the six per-range distribution rows with a stacked mix bar (one segment per range,
+with a compact counter legend), a sparkline with one thin bar per request over the last 20 (height is the
+hit rate, colour is the range, the tooltip shows model and percentage), and a one-line summary such as
+`18 of 20 requests ≥ 76% · 2 cold starts`. The remaining cache figures are unchanged.
 
 Visibility follows **Settings → Mistral Pro → Usage → Sidebar card visibility**: `auto` shows the card when
 an account is configured, `always` pins it, and `off` hides it. Background tabs pause polling and refresh
@@ -285,6 +317,8 @@ its `hitRate` stays `cachedTokens / promptTokens`.
 
 ## Settings
 
+- **Keys**: the Vibe and Studio key rows with Save and Test (see
+  [Two keys](#two-keys-vibe-and-studio)).
 - **Accounts**: add, remove, reorder, enable/disable, store a key (save & enable), test connectivity.
 - **Models**: toggle visibility, override context window, max output, and default reasoning effort.
 - **Usage**: sidebar card visibility (`auto` / `always` / `off`), refresh interval, credit balance,
@@ -297,7 +331,7 @@ its `hitRate` stays `cachedTokens / promptTokens`.
   - **Report stream usage** (`cache.reportUsage`, on by default): sends
     `stream_options.include_usage`; turning it off also hides the `cachedTokens` counts.
   - **Show prompt-cache hit rate** (`usage.showCache`, on by default): the statistics-panel section that
-    reads `/cache` and shows the rate, the cached / total prompt tokens and the last request.
+    reads `/cache` and shows the rate, the mix bar, the sparkline, the summary line and the last request.
   - **Transport** (`advanced.transport`, default `https`): `https` posts the serialized body over
     `node:https`; `fetch` routes through `globalThis.fetch` so in-process wrappers can see and rewrite
     the request.
@@ -359,8 +393,9 @@ monthly plan allowance first and fall back to pay-as-you-go billing after that.
 
 ### Where do I get a Mistral API key?
 
-Generate one under [Code › Vibe CLI](https://chat.mistral.ai/code/extensions) and paste it into
-**Settings → Mistral Pro → Accounts**.
+The Vibe key is in `~/.vibe/.env` after `vibe --setup`, or under Code › Extensions → Advanced → Vibe API
+Key. The Studio key comes from the Mistral admin under API › API Keys. Paste either one into
+**Settings → Mistral Pro → Keys** — see [Two keys](#two-keys-vibe-and-studio).
 
 ### Does it support tool calls, reasoning and images?
 

@@ -13,6 +13,7 @@ import { AccountPool, resolveAccountKey } from './lib/accounts.js'
 import { MistralProAdapter } from './lib/adapter.js'
 import { createUsageService } from './lib/usage.js'
 import { aggregateUsage, readWire, wireLogPath, WIRE_LOG_MAX_LINES } from './lib/wire.js'
+import { routeRejection } from './lib/admission.js'
 
 export { Config }
 export const name = 'dsh-mistral-pro'
@@ -134,13 +135,32 @@ export function apply(ctx, config) {
     void refreshCatalog()
   })
 
-  ctx.inject(['webServer'], (child) => {
+  // `connection` is required beside `webServer`: these routes answer private
+  // account, usage and billing data, and a `resource` route gets no admission
+  // from the carrier. Without the Connection service there is nothing to
+  // authenticate with, so the routes stay unregistered (fail closed).
+  ctx.inject(['webServer', 'connection'], (child) => {
     const route = (path, handler) =>
       child.effect(() =>
         child.webServer.register({
           kind: 'prefix',
           path: `${ROUTE_PREFIX}${path}`,
-          resource: handler,
+          resource: async (request, peer) => {
+            const rejection = routeRejection(child.get('connection'), request, peer)
+            if (rejection !== undefined) {
+              return json(
+                {
+                  ok: false,
+                  error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'This route requires an authenticated Host session.',
+                  },
+                },
+                rejection,
+              )
+            }
+            return handler(request)
+          },
         }),
       )
 

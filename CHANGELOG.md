@@ -4,6 +4,20 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.8.2
+
+### Security
+
+- **The browser routes now require an authenticated Host session.** A Web carrier `resource` route
+  gets no admission from the carrier, so `/usage`, `/cache`, `/wire`, `/test`, `/meta`, `/health`,
+  `/settings`, `/refresh`, `/models` and `/client` were reachable by any caller that could reach the
+  listener — including cross-site requests and DNS rebinding — and answered private account, usage
+  and billing data. Every route now asks the composition's `connection` service for a rejection
+  first (`requestRejection`): its Host/Origin fence and login-token cookie gate the request before
+  any data is read. The guard fails closed — a composition without `connection` registers no route
+  at all, a guard that throws refuses, and an in-process `readResource` read is answered only for an
+  owner Peer. Covered by `test/route-admission.mjs`.
+
 ## 0.8.1
 
 ### Fixed

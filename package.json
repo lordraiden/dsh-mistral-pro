@@ -1,6 +1,6 @@
 {
   "name": "dsh-mistral-pro",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Mistral subscription (Vibe Pro/Team) provider for DeepSeek Harness: multi-account failover, model catalog, sidebar usage card, statistics panel and settings page.",
   "icon": "icon.svg",
   "type": "module",
@@ -12,7 +12,7 @@
   "main": "./index.js",
   "scripts": {
     "test": "node test/run.mjs",
-    "check": "node --check index.js && node --check client.js && node --check lib/adapter.js && node --check lib/config.js && node --check lib/catalog.js && node --check lib/transport.js && node --check lib/wire.js && node --check lib/usage.js && node --check lib/accounts.js"
+    "check": "node --check index.js && node --check client.js && node --check lib/adapter.js && node --check lib/config.js && node --check lib/catalog.js && node --check lib/transport.js && node --check lib/wire.js && node --check lib/usage.js && node --check lib/accounts.js && node --check lib/admission.js"
   },
   "exports": {
     ".": "./index.js",

@@ -53,13 +53,18 @@ check(
 check(
   'the aggregate has exactly the documented top-level keys',
   JSON.stringify(Object.keys(aggregate).sort()) ===
-    '["byAccount","byAffinity","byModel","cachedTokens","coldAfterFailover","distribution","failovers","hitRate","promptTokens","recent","requests","steadyState","steadyStateByRoute"]',
+    '["byAccount","byAffinity","byModel","cachedTokens","coldAfterFailover","distribution","failovers","hitRate","promptTokens","recent","requests","steadyState","steadyStateByRoute","window"]',
   JSON.stringify(Object.keys(aggregate)),
 )
 check(
   'the pre-existing fields keep their meaning beside the new breakdowns',
   aggregate.requests === 25 && aggregate.promptTokens === 25000 && aggregate.cachedTokens === 18000 && aggregate.hitRate === 18000 / 25000,
   JSON.stringify({ requests: aggregate.requests, promptTokens: aggregate.promptTokens, cachedTokens: aggregate.cachedTokens }),
+)
+check(
+  'the aggregate reports the retained window it was computed over',
+  aggregate.window.maxLines === WIRE_LOG_MAX_LINES && aggregate.window.entries === entries.length,
+  JSON.stringify(aggregate.window),
 )
 check(
   'a log without account, model-free or affinity labels still produces breakdowns',

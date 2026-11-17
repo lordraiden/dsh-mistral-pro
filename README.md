@@ -306,14 +306,35 @@ separately acknowledged serving-side cache misses that no client change can fix
 guarantee that requests land on the same server. `cache.affinity` and `cache.reportUsage` can be turned off
 independently; turning off `reportUsage` also costs you the cache-hit numbers.
 
-To see what actually happened, `GET /plugins/dsh-mistral-pro/wire?limit=20` returns one `usage` entry per
-request with `promptTokens`, `cachedTokens`, the serving `account`, a `conversation` digest, an `affinity`
-digest and a `prefixSha256` digest of everything except the new turn. The `affinity` digest is taken from
-the `x-affinity` header that was actually placed on the request, not from the setting that was expected to
+To see what actually happened, `GET /plugins/dsh-mistral-pro/wire?limit=20` returns the `request` and
+`usage` entries of the recent requests. The `usage` entry carries `promptTokens`, `cachedTokens`, the
+serving `account`, a `conversation` digest and an `affinity` digest. The `affinity` digest is taken from the
+`x-affinity` header that was actually placed on the request, not from the setting that was expected to
 produce it, and it is omitted when no header was sent. While the adapter sends the cache key as the
-affinity, the two digests are equal; they diverge the moment the two identities do. A hit rate near 0% with
-a stable prefix usually means the prompt is under 64 tokens, the cache expired between turns, or something
-upstream is rewriting the first messages.
+affinity, the two digests are equal; they diverge the moment the two identities do.
+
+The `request` entry carries `prefixRelation` and `prefixReused`, the only client-side signal that can tell
+normal append-only growth from a rewritten prefix. `prefixRelation` is one of:
+
+| Value | Meaning |
+| --- | --- |
+| `first` | No earlier request of this conversation was observed in this process (first turn, plugin reload, or the conversation was evicted from the bounded cache). |
+| `append` | The previous request's message list is an exact leading sequence of this one: the conversation only grew. |
+| `repeat` | The message list is identical to the previous request (a retry). |
+| `rewrite` | The lists diverge before the end of the shorter one: the system prompt changed, a compaction replaced the history, a tool result was pruned, or the history was truncated. |
+
+`prefixReused` is how many leading messages are byte-identical to the previous request, so `rewrite` with
+`prefixReused: 1` means only the system message survived. The comparison is bounded and in memory: it
+covers at most the first 512 messages of a conversation and the 32 most recently used conversations, it
+keeps only one digest per message, and it never writes message content anywhere. It is also process-local:
+after a restart the first observed request is `first`. Auxiliary calls (session title, compaction,
+auto-review) are not part of the conversation's message sequence, so they carry no relation and do not
+disturb the next comparison.
+
+This is a request-structure diagnostic only. It says whether the messages this client sent are the same
+leading sequence as last time; it cannot see the provider's tokenized prefix, its cache placement, or why a
+request missed. A hit rate near 0% with `prefixRelation: append` usually means the prompt is under 64
+tokens, the cache expired between turns, or the provider missed on its side.
 
 `GET /plugins/dsh-mistral-pro/cache` reports the whole-log `requests`, `promptTokens`, `cachedTokens` and
 `hitRate`, plus the views that answer "why is it low":
@@ -321,10 +342,14 @@ upstream is rewriting the first messages.
 - `steadyState` — the same numbers without the first request of each conversation, which is cold by
   design;
 - `steadyStateByRoute` — the same numbers without the first request of each
-  `(account, affinity, prompt-key)` route. A hit also needs the same serving account and the same effective
-  affinity, so an account failover, a key rotation after compaction or a new affinity is a cold start even
-  when the conversation itself is warm. This is the honest number when you switch accounts; `steadyState`
-  keeps its original prompt-key-only meaning;
+  `(account, model, affinity, prompt-key)` route. A hit also needs the same serving account, the same model
+  and the same effective affinity, so an account failover, a model change, a key rotation after compaction
+  or a new affinity is a cold start even when the conversation itself is warm. The model is part of the
+  identity because a custom `prompt_cache_key` does not carry it. This is the honest number when you switch
+  accounts; `steadyState` keeps its original prompt-key-only meaning;
+- `window` — the retained log window the figures were computed over (`maxLines`, `entries`). Every rate
+  here is relative to that window: the request a steady-state view drops is the first one still visible, not
+  necessarily a real cold start, and a route may have been warm long before its earlier entries rotated out;
 - `distribution` — how many requests landed in each per-request hit-rate bucket (`0`, `1-25`, `26-50`,
   `51-75`, `76-99`, `100`);
 - `byAccount`, `byModel`, `byAffinity` — the same totals per serving account, per model and per affinity
@@ -343,8 +368,9 @@ Reading the numbers, in order:
    `coldAfterFailover` and at `byAccount`.
 3. One low `byAccount` entry with the others healthy means that account's traffic is missing; the plugin is
    not rewriting anything.
-4. A low rate in every account and model, with `prefixSha256` unchanged between turns in `/wire`, points at
-   provider-side eviction — the case Mistral acknowledged in #1512. No client setting fixes it.
+4. A low rate in every account and model, with `prefixRelation: append` on the missing turns in `/wire`,
+   points at provider-side eviction — the case Mistral acknowledged in #1512. No client setting fixes it. A
+   `rewrite` instead means this client changed the prefix, and that is actionable.
 
 
 ### Usage accounting
@@ -393,7 +419,7 @@ Same-origin read-only routes registered for troubleshooting:
 | `/plugins/dsh-mistral-pro/refresh` | force a live model catalog refresh |
 | `/plugins/dsh-mistral-pro/settings` | settings namespace and revision |
 | `/plugins/dsh-mistral-pro/wire?limit=20` | newest wire fingerprints, per-message key layout, cache usage, conversation id, prefix digest and serving account |
-| `/plugins/dsh-mistral-pro/cache` | aggregate, steady-state and route-aware hit rates, per-account / per-model / per-affinity breakdowns, per-request distribution, failover counts, and the 20 newest usage entries |
+| `/plugins/dsh-mistral-pro/cache` | aggregate, steady-state and route-aware hit rates over the retained log window, per-account / per-model / per-affinity breakdowns, per-request distribution, failover counts, and the 20 newest usage entries |
 
 ## Transport and the wire log
 
@@ -415,12 +441,13 @@ leave the machine.
 Every request appends one line to `%TEMP%\dsh-mistral-wire.log` (override with `DSH_MISTRAL_WIRE_LOG`):
 model id, message count, each message's role and keys, how many messages carry `reasoning_content`, the
 serving `account`, a 16-hex digest of the exact `x-affinity` value placed on the request (omitted when no
-header was sent), and a 16-hex SHA-256 of the serialized body. A second `usage` line records
-`promptTokens`, `cachedTokens`, the serving `account`, the `conversation` digest, the `affinity` digest,
-`prefixSha256`, `messages` and `prefixMessages`; an account switch appends a `failover` line with `from`,
-`to` and the failure code. The log is trimmed to 400 lines and a logging failure never interrupts a call.
-Only a completed response whose supplier reported usage produces a `usage` line, so an interrupted stream
-leaves no zero-cache record behind.
+header was sent), `prefixRelation` and `prefixReused` (omitted when there is no conversation identity to
+compare), and a 16-hex SHA-256 of the serialized body. A second `usage` line records `promptTokens`,
+`cachedTokens`, the serving `account`, the `conversation` digest, the `affinity` digest, `messages` and
+`sha256`; an account switch appends a `failover` line with `from`, `to` and the failure code. The log is
+trimmed to 400 lines and a logging failure never interrupts a call. Only a completed response whose
+supplier reported usage produces a `usage` line, so an interrupted stream leaves no zero-cache record
+behind. Every aggregate on `/cache` is computed over that retained window, which `window` reports.
 
 The log is created with mode `0600`: `%TEMP%` is usually `/tmp` (`1777`), and the entries are prompt
 metadata. If an older version left the file world-readable, the next write tightens it to `0600`, and
@@ -449,11 +476,12 @@ that service is unavailable).
 
 Usually one of three things: the prompt is under 64 tokens, the cache expired between turns, or something
 upstream is rewriting the first messages. Check `/plugins/dsh-mistral-pro/wire?limit=20` for the per-request
-`cachedTokens` and `prefixSha256`, and `/plugins/dsh-mistral-pro/cache` for the steady-state rate, the
+`cachedTokens` and `prefixRelation`, and `/plugins/dsh-mistral-pro/cache` for the steady-state rate, the
 route-aware rate and the per-account breakdown — a low whole-log rate with a high steady-state rate means
 cold starts, not a broken cache; a healthy `steadyState` with a low `steadyStateByRoute` means account
-failovers or key rotations; a low rate in every account with unchanged `prefixSha256` values is
-provider-side eviction, which no plugin setting can fix.
+failovers, model changes or key rotations; a low rate in every account with `prefixRelation: append` is
+provider-side eviction, which no plugin setting can fix. A `prefixRelation: rewrite` is the one case this
+client can act on: something changed the messages it sends.
 
 ### Is my API key sent anywhere besides Mistral?
 
@@ -484,6 +512,11 @@ panel and the diagnostic routes. Version numbers are not comparable between the 
   still miss after the provider's cache expires, prompts under 64 tokens never hit, and Mistral has
   acknowledged serving-side cache misses ([mistral-vibe#1512](https://github.com/mistralai/mistral-vibe/issues/1512))
   that no client change can fix.
+- `prefixRelation` is a process-local comparison: it covers the first 512 messages of a conversation and the
+  32 most recently used conversations, and the first request after a plugin restart is reported as `first`.
+  It describes the messages this client sent, not the provider's tokenized prefix or cache state.
+- `steadyState` and `steadyStateByRoute` are calculations over the retained 400-line log window, not lifetime
+  counters: the request they drop is the first one still visible, which may already have been warm.
 - Failover account promotion is kept in memory only and resets to the configured order when the process
   restarts.
 - Image inputs require DSH's `attachments` service and fall back to placeholder text if unavailable.

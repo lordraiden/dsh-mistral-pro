@@ -96,7 +96,7 @@
     "recent": "最近 20 次请求",
     "summary": "{total} 次请求中 {high} 次 ≥ 76% · {cold} 次冷启动",
     "sparkTitle": "{model} · {rate}",
-    "steady": "稳态"
+    "steady": "稳态（日志窗口）"
   },
   "advanced": {
     "title": "高级设置",

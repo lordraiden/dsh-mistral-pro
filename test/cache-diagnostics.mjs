@@ -10,7 +10,7 @@
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { affinityId, aggregateUsage, conversationId, readWire } from '../lib/wire.js'
+import { affinityId, aggregateUsage, conversationId, readWire, WIRE_LOG_MAX_LINES } from '../lib/wire.js'
 import { baseConfig, drain, makeAdapter, startServer, sse, textStream, userMessage } from './support/harness.mjs'
 
 const failures = []
@@ -293,6 +293,61 @@ check(
   'the first request after a rotation is not counted as a warm miss',
   rotation.steadyStateByRoute.requests === 1 && rotation.steadyStateByRoute.cachedTokens === 850,
   JSON.stringify(rotation.steadyStateByRoute),
+)
+
+// --- the route identity includes the model ---
+// A custom prompt_cache_key is passed through unchanged and does not carry the
+// model, so two models can share account, affinity and key digest. They are
+// still different routes: cache reuse must not be assumed across models.
+const multiModel = aggregateUsage([
+  entry({ ts: 1, model: 'model-a', affinity: 'a1', conversation: 'c1', cachedTokens: 0 }),
+  entry({ ts: 2, model: 'model-a', affinity: 'a1', conversation: 'c1', cachedTokens: 900 }),
+  entry({ ts: 3, model: 'model-b', affinity: 'a1', conversation: 'c1', cachedTokens: 0 }),
+  entry({ ts: 4, model: 'model-b', affinity: 'a1', conversation: 'c1', cachedTokens: 800 }),
+])
+check(
+  'steadyStateByRoute separates models that share account, affinity and prompt key',
+  multiModel.steadyStateByRoute.requests === 2 &&
+    multiModel.steadyStateByRoute.promptTokens === 2000 &&
+    multiModel.steadyStateByRoute.cachedTokens === 1700,
+  JSON.stringify(multiModel.steadyStateByRoute),
+)
+check(
+  'each model keeps its own warm entries',
+  multiModel.steadyStateByRoute.hitRate === 0.85,
+  String(multiModel.steadyStateByRoute.hitRate),
+)
+
+// --- the route identity cannot be forged by a delimiter inside a label ---
+// Account names and model ids are arbitrary strings; a delimiter-joined key
+// would let `a\0b` + `c` collide with `a` + `b\0c`.
+const colliding = aggregateUsage([
+  entry({ ts: 1, account: 'a\u0000b', model: 'c', affinity: 'x', conversation: 'y', cachedTokens: 0 }),
+  entry({ ts: 2, account: 'a', model: 'b\u0000c', affinity: 'x', conversation: 'y', cachedTokens: 0 }),
+])
+check(
+  'a delimiter inside a label cannot merge two different routes',
+  colliding.steadyStateByRoute.requests === 0,
+  JSON.stringify(colliding.steadyStateByRoute),
+)
+
+// --- the steady-state views are relative to the retained log window ---
+// The first visible request of this route is already warm. The view still drops
+// it, because it cannot know whether it was the first request ever: the metric
+// is a calculation over the retained window, not a lifetime cold-start counter.
+const warmWindow = aggregateUsage([
+  entry({ ts: 1, account: 'Vibe', model: 'm', affinity: 'a1', conversation: 'c1', promptTokens: 1000, cachedTokens: 900 }),
+  entry({ ts: 2, account: 'Vibe', model: 'm', affinity: 'a1', conversation: 'c1', promptTokens: 1000, cachedTokens: 950 }),
+])
+check(
+  'a warm first visible request is still dropped as the first observation',
+  warmWindow.steadyStateByRoute.requests === 1 && warmWindow.steadyStateByRoute.cachedTokens === 950,
+  JSON.stringify(warmWindow.steadyStateByRoute),
+)
+check(
+  'the aggregate exposes the retained window beside the rates',
+  warmWindow.window.entries === 2 && warmWindow.window.maxLines === WIRE_LOG_MAX_LINES,
+  JSON.stringify(warmWindow.window),
 )
 
 // --- recent entries carry the labels needed to attribute one miss ---

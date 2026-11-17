@@ -21,8 +21,22 @@ top of upstream `0.1.2`.
   `account`, `affinity` and `conversation`. Every pre-existing field keeps its meaning.
 - **`steadyStateByRoute` is the cold-start-corrected rate when routing matters too.** `steadyState` keeps
   its original prompt-key-only grouping; the new view removes the first request of each
-  `(account, affinity, prompt-key)` route, so an account failover or a key rotation after compaction is
-  no longer counted as a warm miss. Both are reported side by side rather than redefining the old metric.
+  `(account, model, affinity, prompt-key)` route, so an account failover, a model change or a key rotation
+  after compaction is no longer counted as a warm miss. The model is part of the identity because a custom
+  `prompt_cache_key` does not carry it, and the tuple is JSON-encoded so a delimiter inside an account name
+  or model id cannot merge two routes. Both views are reported side by side rather than redefining the old
+  metric.
+- **The prefix diagnostic now compares against the previous request.** `prefixSha256` (a digest of
+  everything but the new turn) was not stable across append-only turns, so it could not support the
+  documented "unchanged digest means the provider evicted" rule. It is replaced by `prefixRelation`
+  (`first` / `append` / `rewrite` / `repeat`) and `prefixReused` on the `request` line, computed by a
+  bounded in-memory comparison with the previous request of the same conversation: only per-message
+  digests are retained (first 512 messages, 32 most recently used conversations), never content. It
+  distinguishes append-only growth from a rewritten prefix, is process-local, and is a request-structure
+  diagnostic only — it cannot see the provider's tokenized prefix or cache placement.
+- **The steady-state views are documented and labelled as window-relative.** `/cache` now reports `window`
+  (`maxLines`, `entries`), and the README plus the statistics panel state that the request a steady-state
+  view drops is the first one still visible in the retained 400-line log, not a proven cold start.
 - **Missing usage is no longer a zero-cache response.** A `usage` line is written only for a completed
   response whose supplier reported a prompt count; an interrupted stream, a `usage: {}` chunk or a usage
   object without `prompt_tokens` leaves no record, so it cannot drag the hit rate down.

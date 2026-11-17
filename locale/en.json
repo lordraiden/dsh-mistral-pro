@@ -96,7 +96,7 @@
     "recent": "Last 20 requests",
     "summary": "{high} of {total} requests ≥ 76% · {cold} cold starts",
     "sparkTitle": "{model} · {rate}",
-    "steady": "steady state"
+    "steady": "steady state (log window)"
   },
   "advanced": {
     "title": "Advanced",

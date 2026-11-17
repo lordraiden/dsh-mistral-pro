@@ -2,7 +2,7 @@
 
 **DeepSeek Harness（DSH）で Mistral のサブスクリプション（Vibe Pro / Team）を使うためのモデルプロバイダープラグインです。** `mistral-pro` モデルルート、複数アカウントのフェイルオーバー、プロンプトキャッシュのチューニング、入力欄ツールバーの使用量パネルを提供します。
 
-![version](https://img.shields.io/badge/version-0.8.1-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.9.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -231,15 +231,41 @@ Mistral の[プロンプトキャッシュ](https://docs.mistral.ai/inference/co
 
 圧縮は会話のプレフィックスを書き換えるため、導出キー（`auto` と `shared`）は圧縮ごとに 1 回ローテーションします。DSH の圧縮チェックポイントにある最新の `compactionId` をハッシュに混ぜることで、書き換え後のプレフィックスは古いプレフィックスを指していたキーではなく、きれいなキャッシュエントリに収まります。圧縮しないセッションは影響を受けず、キーの導出はバイト単位で同一です。
 
-プラグインは同じ値を `x-affinity` ヘッダーとしても送信します。このヘッダーは**未公開かつ未検証**です。Mistral のプロンプトキャッシュのドキュメントには記載がなく、ライブ API に対する A/B 実行でもキャッシュヒットに差は測れませんでした（ヘッダーありで 7/8、なしで 8/8。唯一のミスは最初のコールドコール）。残しているのは、サードパーティの証拠がキャッシュルーティングに影響しうることを示唆していること、このヘッダーを知らないサーバーは無視すること、そして削除しても中立であることを示せないことによります。リクエストが同じサーバーに届く保証ではなく、役立つ可能性のあるヒントとして扱ってください。`cache.affinity` と `cache.reportUsage` は個別に無効化できます。`reportUsage` を無効にすると、キャッシュヒットの数値も失います。
+プラグインは同じ値を `x-affinity` ヘッダーとしても送信します。このヘッダーは**未公開**です。Mistral のプロンプトキャッシュのドキュメントには記載がありませんが、Mistral は自社 API が「`prompt_cache_key` より先に `x-affinity` をキャッシュルーティングに使う」と述べており（[mistral-vibe#1481](https://github.com/mistralai/mistral-vibe/issues/1481#issuecomment-6772557727)）、Vibe はセッションファミリーの root id から派生させています。ライブ API に対する A/B 実行ではキャッシュヒットに差は測れませんでした（ヘッダーありで 7/8、なしで 8/8。唯一のミスは最初のコールドコール）。さらに Mistral は、クライアント側の変更では直せないサービス側のキャッシュミスを認めています（[#1512](https://github.com/mistralai/mistral-vibe/issues/1512)）。リクエストが同じサーバーに届く保証ではなく、役立つ可能性のあるヒントとして扱ってください。`cache.affinity` と `cache.reportUsage` は個別に無効化できます。`reportUsage` を無効にすると、キャッシュヒットの数値も失います。
 
-実際に何が起きたかを確認するには、`GET /plugins/dsh-mistral-pro/wire?limit=20` を使います。各リクエストの `usage` エントリに `promptTokens`、`cachedTokens`、応答した `account`、`conversation` ダイジェスト、そして新しいターンを除く全メッセージの `prefixSha256` ダイジェストが含まれます。プレフィックスが安定しているのにヒット率がほぼ 0% の場合、プロンプトが 64 トークン未満であるか、ターン間でキャッシュが期限切れになったか、上流で最初のメッセージが書き換えられているかのいずれかです。
+実際に何が起きたかを確認するには、`GET /plugins/dsh-mistral-pro/wire?limit=20` を使います。直近のリクエストの `request` 行と `usage` 行が返ります。`usage` 行には `promptTokens`、`cachedTokens`、応答した `account`、`conversation` ダイジェスト、`affinity` ダイジェストが含まれます。`affinity` ダイジェストは、実際にリクエストへ載せた `x-affinity` ヘッダーの値から取ります（「設定が送るはずの値」ではありません）。ヘッダーを送らなかった場合は省略されます。アダプターがキャッシュキーを affinity として送っている間は 2 つのダイジェストは一致し、2 つの識別子が分かれた時点で一致しなくなります。
 
-`GET /plugins/dsh-mistral-pro/cache` はログ全体の `requests`、`promptTokens`、`cachedTokens`、`hitRate` に加えて、「なぜ低いのか」に答える 3 つのビューを返します:
+`request` 行には `prefixRelation` と `prefixReused` が入ります。これは「通常の追記」と「プレフィックスの書き換え」を区別できる、クライアント側で唯一の信号です。`prefixRelation` の値:
+
+| 値 | 意味 |
+| --- | --- |
+| `first` | このプロセスでその会話の以前のリクエストを観測していない（最初のターン、プラグイン再読み込み、または有界キャッシュから追い出された）。 |
+| `append` | 直前のリクエストのメッセージ列が、今回のリクエストの正確な先頭列である: 会話は追記されただけ。 |
+| `repeat` | メッセージ列が直前のリクエストと同一（リトライ）。 |
+| `rewrite` | 短い方の末尾より前に分岐している: システムプロンプトの変更、圧縮による履歴の置換、ツール結果の刈り込み、履歴の切り詰めのいずれか。 |
+
+`prefixReused` は、直前のリクエストとバイト単位で一致する先頭メッセージの件数です。したがって `rewrite` かつ `prefixReused: 1` は、システムメッセージだけが残ったことを意味します。比較は有界かつメモリ内だけで行います: 会話の先頭 512 メッセージと、最近使われた 32 会話までを対象にし、保持するのはメッセージごとのダイジェスト 1 つだけで、メッセージ内容はどこにも書きません。またプロセス内の比較なので、再起動後に最初に観測したリクエストは `first` になります。補助呼び出し（セッションタイトル、圧縮、自動レビュー）は会話のメッセージ列ではないため、このフィールドを持たず、次の比較にも影響しません。
+
+これはリクエスト構造の診断にすぎません。このクライアントが送ったメッセージが前回と同じ先頭列かどうかを示すだけで、プロバイダー側のトークン化されたプレフィックス、キャッシュの配置、ミスの理由までは分かりません。ヒット率がほぼ 0% で `prefixRelation: append` の場合は、プロンプトが 64 トークン未満、ターン間でキャッシュが期限切れ、またはプロバイダー側のミスのいずれかです。
+
+`GET /plugins/dsh-mistral-pro/cache` はログ全体の `requests`、`promptTokens`、`cachedTokens`、`hitRate` に加えて、「なぜ低いのか」に答えるビューを返します:
 
 - `steadyState` — 各会話の最初のリクエスト（必ずコールド）を除いた同じ数値;
+- `steadyStateByRoute` — さらに各 `(account, model, affinity, prompt-key)` ルートの最初のリクエストを除いた数値。ヒットには同じサービスアカウント、同じモデル、同じ実効 affinity も必要なので、アカウントのフェイルオーバー、モデル変更、圧縮後のキー輪換、新しい affinity は、会話自体が温まっていてもコールドスタートです。カスタム `prompt_cache_key` はモデルを含まないため、モデルはこの識別子の一部です。アカウントを切り替えるときはこちらの数値が正直です。`steadyState` は元の「プロンプトキーのみ」の意味を保ちます;
+- `window` — これらの数値の計算対象になった保持ログ範囲（`maxLines`、`entries`）。ここでの各率はその範囲に対する値です: 定常状態ビューが除くのは「範囲内でまだ見えている最初のリクエスト」であり、実際のコールドスタートとは限らず、ルートは古い記録がローテーションで消える前から温まっていた可能性があります;
 - `distribution` — リクエストごとのヒット率がどの帯（`0`、`1-25`、`26-50`、`51-75`、`76-99`、`100`）に入ったかの件数;
-- `failovers` と `coldAfterFailover` — アカウント切り替えの回数と、その直後のコールドリクエスト。プロンプトキャッシュはアカウント単位なので、このミスは想定内です。
+- `byAccount`、`byModel`、`byAffinity` — サービスアカウント別、モデル別、affinity ダイジェスト別の同じ合計。多い順で、ラベルのないリクエストは `null` グループに入ります;
+- `failovers` と `coldAfterFailover` — アカウント切り替えの回数と、その直後のコールドリクエスト。プロンプトキャッシュはアカウント単位なので、このミスは想定内です;
+- `recent` — 最新 20 件のリクエストと、その `account`、`affinity`、`conversation` ダイジェスト。
+
+サプライヤーが usage を報告した完了レスポンスだけが記録されるため、中断されたストリームはどの数値にも現れず、ゼロキャッシュのリクエストとして数えられることもありません。
+
+数値は次の順に読みます:
+
+1. ログ全体の `hitRate` が低く `steadyState` が高い場合は、キャッシュの故障ではなくコールドスタートです。
+2. `steadyState` が高く `steadyStateByRoute` が低い場合は、アカウントのフェイルオーバーかキー輪換です。`coldAfterFailover` と `byAccount` を見てください。
+3. 1 つの `byAccount` グループだけが低く他が正常なら、そのアカウントのトラフィックが漏れています。プラグインは何も書き換えていません。
+4. すべてのアカウントとモデルで低く、`/wire` の該当ターンが `prefixRelation: append` の場合は、プロバイダー側のエビクション（Mistral が #1512 で認めたケース）を示します。クライアント側の設定では直せません。`rewrite` の場合はこのクライアントがプレフィックスを変えたということであり、対処できます。
 
 
 ### 使用量の計上
@@ -276,7 +302,7 @@ DSH のトークン使用量は**重複しない**バケットです。`inputTok
 | `/plugins/dsh-mistral-pro/refresh` | モデルカタログの即時更新 |
 | `/plugins/dsh-mistral-pro/settings` | 設定の名前空間と revision |
 | `/plugins/dsh-mistral-pro/wire?limit=20` | 最新の wire フィンガープリント、メッセージごとのキー構成、キャッシュ使用量、会話 ID、プレフィックスダイジェスト、応答アカウント |
-| `/plugins/dsh-mistral-pro/cache` | 集計と定常状態のヒット率、リクエストごとの分布、フェイルオーバー回数、最新 20 件の usage エントリ |
+| `/plugins/dsh-mistral-pro/cache` | 保持ログ範囲に対する集計・定常状態・ルート別のヒット率、アカウント / モデル / affinity 別の内訳、リクエストごとの分布、フェイルオーバー回数、最新 20 件の usage エントリ |
 
 ## トランスポートと wire ログ
 
@@ -288,7 +314,7 @@ DSH のトークン使用量は**重複しない**バケットです。`inputTok
 - `advanced.proxy` を設定した場合は常に fetch + undici の `ProxyAgent` を使います。このパスには dispatcher が必要だからです。
 - トレードオフ: この経路で送った通信は、プロキシ系プラグインの圧縮や書き換えを通りません。正確さを優先します。
 
-リクエストごとに `%TEMP%\dsh-mistral-wire.log` へ 1 行追記します（`DSH_MISTRAL_WIRE_LOG` で変更可能）: モデル ID、メッセージ数、各メッセージの role とキー、`reasoning_content` を持つメッセージ数、シリアライズしたボディの 16 桁の SHA-256 です。2 行目の `usage` 行には `promptTokens`、`cachedTokens`、応答した `account`、`conversation` ダイジェスト、`prefixSha256`、`messages`、`prefixMessages` が記録されます。アカウント切り替え時は `failover` 行が `from`、`to`、失敗コード付きで追加されます。ログは 400 行に切り詰められ、ログ出力の失敗がリクエストを中断することはありません。
+リクエストごとに `%TEMP%\dsh-mistral-wire.log` へ 1 行追記します（`DSH_MISTRAL_WIRE_LOG` で変更可能）: モデル ID、メッセージ数、各メッセージの role とキー、`reasoning_content` を持つメッセージ数、応答した `account`、実際にリクエストへ載せた `x-affinity` 値の 16 桁ダイジェスト（ヘッダーを送らなかった場合は省略）、`prefixRelation` と `prefixReused`（比較できる会話識別子がない場合は省略）、シリアライズしたボディの 16 桁の SHA-256 です。2 行目の `usage` 行には `promptTokens`、`cachedTokens`、応答した `account`、`conversation` ダイジェスト、`affinity` ダイジェスト、`messages`、`sha256` が記録されます。アカウント切り替え時は `failover` 行が `from`、`to`、失敗コード付きで追加されます。ログは 400 行に切り詰められ、ログ出力の失敗がリクエストを中断することはありません。サプライヤーが usage を報告した完了レスポンスだけが `usage` 行を残すため、中断されたストリームがゼロキャッシュの記録を残すことはありません。`/cache` の各集計はこの保持範囲に対して計算され、`window` がその範囲を示します。
 
 ログはモード `0600` で作成されます。`%TEMP%` は通常 `/tmp`（`1777`）で、ログの内容はプロンプトのメタデータです。古いバージョンがファイルを誰でも読める状態で残していた場合、次の書き込みで `0600` に引き締められ、ローテーションでもそのモードが保たれます。
 
@@ -308,7 +334,7 @@ Vibe キーは `vibe --setup` の実行後 `~/.vibe/.env` にあり、Code › E
 
 ### プロンプトキャッシュのヒット率が 0% なのはなぜですか？
 
-多くの場合、次の 3 つのいずれかです: プロンプトが 64 トークン未満、ターン間でキャッシュが期限切れ、上流で最初のメッセージが書き換えられている。`/plugins/dsh-mistral-pro/wire?limit=20` でリクエストごとの `cachedTokens` と `prefixSha256` を、`/plugins/dsh-mistral-pro/cache` で定常状態のヒット率と分布を確認してください。ログ全体のヒット率が低く定常状態が高い場合は、キャッシュの故障ではなくコールドスタートです。
+多くの場合、次の 3 つのいずれかです: プロンプトが 64 トークン未満、ターン間でキャッシュが期限切れ、上流で最初のメッセージが書き換えられている。`/plugins/dsh-mistral-pro/wire?limit=20` でリクエストごとの `cachedTokens` と `prefixRelation` を、`/plugins/dsh-mistral-pro/cache` で定常状態のヒット率、ルート別のヒット率、アカウント別の内訳を確認してください。ログ全体のヒット率が低く定常状態が高い場合は、キャッシュの故障ではなくコールドスタートです。`steadyState` が正常で `steadyStateByRoute` が低い場合は、アカウントのフェイルオーバー、モデル変更、キー輪換です。すべてのアカウントで低く `prefixRelation: append` の場合は、プロバイダー側のエビクションであり、プラグインの設定では直せません。`rewrite` の場合はこのクライアントが送るメッセージを変えたということであり、対処できます。
 
 ### API キーが Mistral 以外に送られることはありますか？
 
@@ -328,7 +354,9 @@ Vibe キーは `vibe --setup` の実行後 `~/.vibe/.env` にあり、Code › E
 ## 制限事項
 
 - `/v1/billing/budget` と管理サイトの使用量 API は非公開仕様です。フィールド名で読み取っているため、上流の構造変更で一部の枠が表示されないことがあります。
-- `prompt_cache_key` はヒントであり保証ではありません。プレフィックスが安定していても、プロバイダーのキャッシュが期限切れになればミスしますし、64 トークン未満のプロンプトは決してヒットしません。
+- `prompt_cache_key` と `x-affinity` はヒントであり保証ではありません。プレフィックスと affinity が安定していても、プロバイダーのキャッシュが期限切れになればミスしますし、64 トークン未満のプロンプトは決してヒットしません。さらに Mistral は、クライアント側の変更では直せないサービス側のキャッシュミスを認めています（[mistral-vibe#1512](https://github.com/mistralai/mistral-vibe/issues/1512)）。
+- `prefixRelation` はプロセス内の比較です: 会話の先頭 512 メッセージと、最近使われた 32 会話までを対象にし、プラグイン再起動後の最初のリクエストは `first` になります。このクライアントが送ったメッセージを表すもので、プロバイダー側のトークン化されたプレフィックスやキャッシュ状態ではありません。
+- `steadyState` と `steadyStateByRoute` は保持された 400 行のログ範囲に対する計算であり、ライフタイムのカウンターではありません。除かれるのは範囲内でまだ見えている最初のリクエストであり、すでに温まっていた可能性があります。
 - フェイルオーバーによるアカウント順位の繰り上げはメモリ上でのみ保持され、プロセス再起動時には設定順に戻ります。
 - 画像入力には DSH の `attachments` サービスが必要です。利用できない環境ではプレースホルダー文字列に置き換わります。
 - プロキシ機能はホスト環境で `undici` を解決できる必要があります（解決できない場合はエラーを返します）。

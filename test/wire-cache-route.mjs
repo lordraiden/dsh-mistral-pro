@@ -42,17 +42,34 @@ check(
 )
 check('recent keeps model ids', aggregate.recent.at(-1).model === 'mistral-small-4', String(aggregate.recent.at(-1).model))
 check(
-  'recent exposes only counts, model ids and a hit rate',
+  'recent exposes counts, model ids, a hit rate and the attribution labels',
   aggregate.recent.every(
-    (entry) => JSON.stringify(Object.keys(entry).sort()) === '["cachedTokens","hitRate","model","promptTokens","ts"]',
+    (entry) =>
+      JSON.stringify(Object.keys(entry).sort()) ===
+      '["account","affinity","cachedTokens","conversation","hitRate","model","promptTokens","ts"]',
   ),
   JSON.stringify(aggregate.recent[0]),
 )
 check(
   'the aggregate has exactly the documented top-level keys',
   JSON.stringify(Object.keys(aggregate).sort()) ===
-    '["cachedTokens","coldAfterFailover","distribution","failovers","hitRate","promptTokens","recent","requests","steadyState"]',
+    '["byAccount","byAffinity","byModel","cachedTokens","coldAfterFailover","distribution","failovers","hitRate","promptTokens","recent","requests","steadyState","steadyStateByRoute","window"]',
   JSON.stringify(Object.keys(aggregate)),
+)
+check(
+  'the pre-existing fields keep their meaning beside the new breakdowns',
+  aggregate.requests === 25 && aggregate.promptTokens === 25000 && aggregate.cachedTokens === 18000 && aggregate.hitRate === 18000 / 25000,
+  JSON.stringify({ requests: aggregate.requests, promptTokens: aggregate.promptTokens, cachedTokens: aggregate.cachedTokens }),
+)
+check(
+  'the aggregate reports the retained window it was computed over',
+  aggregate.window.maxLines === WIRE_LOG_MAX_LINES && aggregate.window.entries === entries.length,
+  JSON.stringify(aggregate.window),
+)
+check(
+  'a log without account, model-free or affinity labels still produces breakdowns',
+  aggregate.byModel.length === 2 && aggregate.byAccount.length === 1 && aggregate.byAccount[0].account === null,
+  JSON.stringify({ byModel: aggregate.byModel, byAccount: aggregate.byAccount }),
 )
 
 // --- an empty log is zeroed, not NaN ---

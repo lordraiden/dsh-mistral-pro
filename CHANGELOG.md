@@ -4,6 +4,45 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.9.0
+
+### Cache diagnostics
+
+- **The wire log records the affinity that was actually sent.** Every `request` line now carries the
+  serving `account` and a 16-hex digest of the exact `x-affinity` value placed on the request (omitted
+  when no header was sent), and the matching `usage` line carries the same `affinity` digest. The digest
+  is read back from the headers handed to the transport, so a later change that derives the affinity from
+  a different identity is visible in the log instead of being assumed. While the adapter sends the cache
+  key as the affinity the digest equals the `conversation` digest; it diverges as soon as the two
+  identities do. No raw header value, cache key, session id or prompt text is logged.
+- **`/cache` breaks the hit rate down by account, model and routing identity.** New `byAccount`,
+  `byModel` and `byAffinity` arrays report requests, prompt tokens, cached tokens and the token-weighted
+  rate per group, busiest first, with a `null` group for unlabelled requests. `recent` entries gain
+  `account`, `affinity` and `conversation`. Every pre-existing field keeps its meaning.
+- **`steadyStateByRoute` is the cold-start-corrected rate when routing matters too.** `steadyState` keeps
+  its original prompt-key-only grouping; the new view removes the first request of each
+  `(account, model, affinity, prompt-key)` route, so an account failover, a model change or a key rotation
+  after compaction is no longer counted as a warm miss. The model is part of the identity because a custom
+  `prompt_cache_key` does not carry it, and the tuple is JSON-encoded so a delimiter inside an account name
+  or model id cannot merge two routes. Both views are reported side by side rather than redefining the old
+  metric.
+- **The prefix diagnostic now compares against the previous request.** `prefixSha256` (a digest of
+  everything but the new turn) was not stable across append-only turns, so it could not support the
+  documented "unchanged digest means the provider evicted" rule. It is replaced by `prefixRelation`
+  (`first` / `append` / `rewrite` / `repeat`) and `prefixReused` on the `request` line, computed by a
+  bounded in-memory comparison with the previous request of the same conversation: only per-message
+  digests are retained (first 512 messages, 32 most recently used conversations), never content. It
+  distinguishes append-only growth from a rewritten prefix, is process-local, and is a request-structure
+  diagnostic only — it cannot see the provider's tokenized prefix or cache placement.
+- **The steady-state views are documented and labelled as window-relative.** `/cache` now reports `window`
+  (`maxLines`, `entries`), and the README plus the statistics panel state that the request a steady-state
+  view drops is the first one still visible in the retained 400-line log, not a proven cold start.
+- **Missing usage is no longer a zero-cache response.** A `usage` line is written only for a completed
+  response whose supplier reported a prompt count; an interrupted stream, a `usage: {}` chunk or a usage
+  object without `prompt_tokens` leaves no record, so it cannot drag the hit rate down.
+- Covered by `test/cache-diagnostics.mjs` (multiple accounts and models, affinity changes, account
+  failover, compaction rotation, missing usage, privacy) and the updated `/cache` shape assertions.
+
 ## 0.8.2
 
 ### Security

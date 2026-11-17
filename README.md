@@ -295,29 +295,56 @@ compaction: the newest `compactionId` from DSH's compaction checkpoint is mixed 
 rewritten prefix a clean cache entry instead of filing it under a key that pointed at the old prefix.
 Sessions that never compact are unaffected — their key derivation is byte-identical.
 
-The plugin also sends an `x-affinity` header with the same value. The header is **undocumented and
-unverified**: Mistral's prompt-caching documentation does not mention it, and an A/B run against the live
-API measured no difference in cache hits (7/8 with the header vs 8/8 without; the only miss was the first,
-cold call). It is kept because third-party evidence suggests it can influence cache routing, servers that
-do not know it ignore it, and removing it cannot be shown neutral — treat it as a hint that may help, not a
+The plugin also sends an `x-affinity` header with the same value as the cache key. The header is
+**undocumented**: Mistral's prompt-caching documentation does not mention it, but Mistral has stated that
+its API "uses it for cache routing ahead of `prompt_cache_key`"
+([mistral-vibe#1481](https://github.com/mistralai/mistral-vibe/issues/1481#issuecomment-6772557727)), and
+Vibe derives it from its session family's root id. An A/B run against the live API measured no difference
+in cache hits (7/8 with the header vs 8/8 without; the only miss was the first, cold call), and Mistral
+separately acknowledged serving-side cache misses that no client change can fix
+([#1512](https://github.com/mistralai/mistral-vibe/issues/1512)). Treat it as a hint that may help, not a
 guarantee that requests land on the same server. `cache.affinity` and `cache.reportUsage` can be turned off
 independently; turning off `reportUsage` also costs you the cache-hit numbers.
 
 To see what actually happened, `GET /plugins/dsh-mistral-pro/wire?limit=20` returns one `usage` entry per
-request with `promptTokens`, `cachedTokens`, the serving `account`, a `conversation` digest and a
-`prefixSha256` digest of everything except the new turn. A hit rate near 0% with a stable prefix usually
-means the prompt is under 64 tokens, the cache expired between turns, or something upstream is rewriting
-the first messages.
+request with `promptTokens`, `cachedTokens`, the serving `account`, a `conversation` digest, an `affinity`
+digest and a `prefixSha256` digest of everything except the new turn. The `affinity` digest is taken from
+the `x-affinity` header that was actually placed on the request, not from the setting that was expected to
+produce it, and it is omitted when no header was sent. While the adapter sends the cache key as the
+affinity, the two digests are equal; they diverge the moment the two identities do. A hit rate near 0% with
+a stable prefix usually means the prompt is under 64 tokens, the cache expired between turns, or something
+upstream is rewriting the first messages.
 
 `GET /plugins/dsh-mistral-pro/cache` reports the whole-log `requests`, `promptTokens`, `cachedTokens` and
-`hitRate`, plus three views that answer "why is it low":
+`hitRate`, plus the views that answer "why is it low":
 
 - `steadyState` — the same numbers without the first request of each conversation, which is cold by
   design;
+- `steadyStateByRoute` — the same numbers without the first request of each
+  `(account, affinity, prompt-key)` route. A hit also needs the same serving account and the same effective
+  affinity, so an account failover, a key rotation after compaction or a new affinity is a cold start even
+  when the conversation itself is warm. This is the honest number when you switch accounts; `steadyState`
+  keeps its original prompt-key-only meaning;
 - `distribution` — how many requests landed in each per-request hit-rate bucket (`0`, `1-25`, `26-50`,
   `51-75`, `76-99`, `100`);
+- `byAccount`, `byModel`, `byAffinity` — the same totals per serving account, per model and per affinity
+  digest, busiest first, with a `null` group for requests that carried no label;
 - `failovers` and `coldAfterFailover` — account switches and the cold request that follows one: prompt
-  caches are per account, so that miss is expected.
+  caches are per account, so that miss is expected;
+- `recent` — the 20 newest requests with their `account`, `affinity` and `conversation` digests.
+
+Only completed responses whose supplier reported usage are recorded, so an interrupted stream is absent
+from every figure instead of being counted as a zero-cache request.
+
+Reading the numbers, in order:
+
+1. A low whole-log `hitRate` with a high `steadyState` is cold starts, not a broken cache.
+2. A high `steadyState` but a low `steadyStateByRoute` is account failovers or key rotations — look at
+   `coldAfterFailover` and at `byAccount`.
+3. One low `byAccount` entry with the others healthy means that account's traffic is missing; the plugin is
+   not rewriting anything.
+4. A low rate in every account and model, with `prefixSha256` unchanged between turns in `/wire`, points at
+   provider-side eviction — the case Mistral acknowledged in #1512. No client setting fixes it.
 
 
 ### Usage accounting
@@ -366,7 +393,7 @@ Same-origin read-only routes registered for troubleshooting:
 | `/plugins/dsh-mistral-pro/refresh` | force a live model catalog refresh |
 | `/plugins/dsh-mistral-pro/settings` | settings namespace and revision |
 | `/plugins/dsh-mistral-pro/wire?limit=20` | newest wire fingerprints, per-message key layout, cache usage, conversation id, prefix digest and serving account |
-| `/plugins/dsh-mistral-pro/cache` | aggregate and steady-state hit rate, per-request distribution, failover counts, and the 20 newest usage entries |
+| `/plugins/dsh-mistral-pro/cache` | aggregate, steady-state and route-aware hit rates, per-account / per-model / per-affinity breakdowns, per-request distribution, failover counts, and the 20 newest usage entries |
 
 ## Transport and the wire log
 
@@ -386,11 +413,14 @@ leave the machine.
 - Trade-off: traffic sent this way skips a proxy plugin's compression and rewrite. Correctness comes first.
 
 Every request appends one line to `%TEMP%\dsh-mistral-wire.log` (override with `DSH_MISTRAL_WIRE_LOG`):
-model id, message count, each message's role and keys, how many messages carry `reasoning_content`, and a
-16-hex SHA-256 of the serialized body. A second `usage` line records `promptTokens`, `cachedTokens`, the
-serving `account`, the `conversation` digest, `prefixSha256`, `messages` and `prefixMessages`; an account
-switch appends a `failover` line with `from`, `to` and the failure code. The log is trimmed to 400 lines and
-a logging failure never interrupts a call.
+model id, message count, each message's role and keys, how many messages carry `reasoning_content`, the
+serving `account`, a 16-hex digest of the exact `x-affinity` value placed on the request (omitted when no
+header was sent), and a 16-hex SHA-256 of the serialized body. A second `usage` line records
+`promptTokens`, `cachedTokens`, the serving `account`, the `conversation` digest, the `affinity` digest,
+`prefixSha256`, `messages` and `prefixMessages`; an account switch appends a `failover` line with `from`,
+`to` and the failure code. The log is trimmed to 400 lines and a logging failure never interrupts a call.
+Only a completed response whose supplier reported usage produces a `usage` line, so an interrupted stream
+leaves no zero-cache record behind.
 
 The log is created with mode `0600`: `%TEMP%` is usually `/tmp` (`1777`), and the entries are prompt
 metadata. If an older version left the file world-readable, the next write tightens it to `0600`, and
@@ -419,8 +449,11 @@ that service is unavailable).
 
 Usually one of three things: the prompt is under 64 tokens, the cache expired between turns, or something
 upstream is rewriting the first messages. Check `/plugins/dsh-mistral-pro/wire?limit=20` for the per-request
-`cachedTokens` and `prefixSha256`, and `/plugins/dsh-mistral-pro/cache` for the steady-state rate and the
-distribution — a low whole-log rate with a high steady-state rate means cold starts, not a broken cache.
+`cachedTokens` and `prefixSha256`, and `/plugins/dsh-mistral-pro/cache` for the steady-state rate, the
+route-aware rate and the per-account breakdown — a low whole-log rate with a high steady-state rate means
+cold starts, not a broken cache; a healthy `steadyState` with a low `steadyStateByRoute` means account
+failovers or key rotations; a low rate in every account with unchanged `prefixSha256` values is
+provider-side eviction, which no plugin setting can fix.
 
 ### Is my API key sent anywhere besides Mistral?
 
@@ -447,8 +480,10 @@ panel and the diagnostic routes. Version numbers are not comparable between the 
 
 - The `/v1/billing/budget` and admin usage endpoints are undocumented. The plugin reads them by field name,
   so upstream schema changes may hide individual windows.
-- `prompt_cache_key` is a hint, not a guarantee: a stable prefix can still miss after the provider's cache
-  expires, and prompts under 64 tokens never hit.
+- `prompt_cache_key` and `x-affinity` are hints, not guarantees: a stable prefix and a stable affinity can
+  still miss after the provider's cache expires, prompts under 64 tokens never hit, and Mistral has
+  acknowledged serving-side cache misses ([mistral-vibe#1512](https://github.com/mistralai/mistral-vibe/issues/1512))
+  that no client change can fix.
 - Failover account promotion is kept in memory only and resets to the configured order when the process
   restarts.
 - Image inputs require DSH's `attachments` service and fall back to placeholder text if unavailable.

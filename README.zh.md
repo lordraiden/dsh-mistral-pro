@@ -231,15 +231,27 @@ Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/adv
 
 压缩会重写对话前缀，因此派生 key（`auto` 与 `shared`）每次压缩后轮换一次：DSH 压缩检查点上最新的 `compactionId` 会混入哈希，让重写后的前缀拥有干净的缓存条目，而不是被归到指向旧前缀的 key 下。从不压缩的会话不受影响——它们的 key 派生逐字节一致。
 
-插件还会发送同值的 `x-affinity` 头。该头**未公开且未经验证**：Mistral 的提示词缓存文档没有提到它，针对线上 API 的 A/B 测试也没有测出缓存命中差异（带头 7/8，不带头 8/8；唯一的未命中是第一次冷调用）。保留它是因为第三方证据表明它可能影响缓存路由，不认识它的服务器会忽略它，而移除它无法被证明是中性的——把它当作可能有帮助的提示，而不是请求会落到同一台服务器的保证。`cache.affinity` 与 `cache.reportUsage` 可单独关闭；关掉 `reportUsage` 就同时失去缓存命中数字。
+插件还会发送同值的 `x-affinity` 头。该头**未公开**：Mistral 的提示词缓存文档没有提到它，但 Mistral 表示其 API「在 `prompt_cache_key` 之前用它做缓存路由」（[mistral-vibe#1481](https://github.com/mistralai/mistral-vibe/issues/1481#issuecomment-6772557727)），Vibe 则用会话家族的 root id 派生它。针对线上 API 的 A/B 测试没有测出缓存命中差异（带头 7/8，不带头 8/8；唯一的未命中是第一次冷调用）；Mistral 另外承认存在服务端缓存未命中，客户端改动无法修复（[#1512](https://github.com/mistralai/mistral-vibe/issues/1512)）。把它当作可能有帮助的提示，而不是请求会落到同一台服务器的保证。`cache.affinity` 与 `cache.reportUsage` 可单独关闭；关掉 `reportUsage` 就同时失去缓存命中数字。
 
-要确认实际发生了什么，`GET /plugins/dsh-mistral-pro/wire?limit=20` 会为每个请求返回一条 `usage` 记录，含 `promptTokens`、`cachedTokens`、服务该请求的 `account`、`conversation` 摘要，以及除本轮新消息外全部内容的 `prefixSha256` 摘要。前缀稳定但命中率接近 0%，通常意味着提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。
+要确认实际发生了什么，`GET /plugins/dsh-mistral-pro/wire?limit=20` 会为每个请求返回一条 `usage` 记录，含 `promptTokens`、`cachedTokens`、服务该请求的 `account`、`conversation` 摘要、`affinity` 摘要，以及除本轮新消息外全部内容的 `prefixSha256` 摘要。`affinity` 摘要取自实际放在请求上的 `x-affinity` 头，而不是「配置本应发送」的值；没有发送该头时则省略。当适配器把缓存 key 当作 affinity 发送时，两个摘要相同；两者一旦分化就不再相同。前缀稳定但命中率接近 0%，通常意味着提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。
 
-`GET /plugins/dsh-mistral-pro/cache` 会汇总整份日志的 `requests`、`promptTokens`、`cachedTokens` 和 `hitRate`，并额外给出三个回答「为什么这么低」的视图：
+`GET /plugins/dsh-mistral-pro/cache` 会汇总整份日志的 `requests`、`promptTokens`、`cachedTokens` 和 `hitRate`，并给出回答「为什么这么低」的视图：
 
 - `steadyState`——去掉每个会话第一条请求后的同一组数字，那条请求本来就必然冷启动；
+- `steadyStateByRoute`——再去掉每个 `(account, affinity, prompt-key)` 路由的第一条请求。命中还要求服务账号与生效 affinity 相同，因此账号切换、压缩后的 key 轮换或新的 affinity 都属于冷启动，即使会话本身已经热了。切换账号时这个数字更诚实；`steadyState` 仍保持它原本「只看 prompt key」的含义；
 - `distribution`——每个请求的命中率落在哪个区间（`0`、`1-25`、`26-50`、`51-75`、`76-99`、`100`）；
-- `failovers` 与 `coldAfterFailover`——账号切换次数，以及切换后紧跟的那条冷请求：提示词缓存按账号隔离，这次未命中是预期行为。
+- `byAccount`、`byModel`、`byAffinity`——按服务账号、模型、affinity 摘要分组的同样总量，最忙的在前，没有标签的请求归入 `null` 组；
+- `failovers` 与 `coldAfterFailover`——账号切换次数，以及切换后紧跟的那条冷请求：提示词缓存按账号隔离，这次未命中是预期行为；
+- `recent`——最新 20 条请求及其 `account`、`affinity`、`conversation` 摘要。
+
+只有供应商确实上报了 usage 的完整响应才会被记录，因此被中断的流不会出现在任何数字里，也不会被当成一次零缓存请求。
+
+按顺序读这些数字：
+
+1. 整份日志 `hitRate` 低而 `steadyState` 高，是冷启动，不是缓存坏了。
+2. `steadyState` 高但 `steadyStateByRoute` 低，是账号切换或 key 轮换——看 `coldAfterFailover` 与 `byAccount`。
+3. 某个 `byAccount` 分组偏低而其他正常，说明那个账号的流量在漏，插件没有改写任何东西。
+4. 所有账号与模型都偏低，且 `/wire` 中相邻轮次的 `prefixSha256` 没有变化，指向服务端驱逐——也就是 Mistral 在 #1512 中承认的情况，任何客户端设置都修不了。
 
 
 ### 用量口径
@@ -276,7 +288,7 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 | `/plugins/dsh-mistral-pro/refresh` | 立即刷新远端模型目录 |
 | `/plugins/dsh-mistral-pro/settings` | 设置命名空间与 revision |
 | `/plugins/dsh-mistral-pro/wire?limit=20` | 最近的 wire 指纹、逐条消息的键名布局、缓存用量、会话 id、前缀摘要与服务账号 |
-| `/plugins/dsh-mistral-pro/cache` | 聚合与稳态命中率、逐请求分布、容灾次数，以及最新 20 条 usage 记录 |
+| `/plugins/dsh-mistral-pro/cache` | 聚合、稳态与按路由的命中率，按账号 / 模型 / affinity 的拆分，逐请求分布、容灾次数，以及最新 20 条 usage 记录 |
 
 ## 传输与 wire 日志
 
@@ -288,7 +300,7 @@ DSH 的 token 用量是**互不重叠**的桶：`inputTokens` 是未缓存输入
 - 配置了 `advanced.proxy` 时仍走 fetch + undici `ProxyAgent`，因为那条路径需要 dispatcher。
 - 代价：走 `node:https` 时发出的流量不经过代理插件的压缩与改写。正确性优先。
 
-每次请求都会向 `%TEMP%\dsh-mistral-wire.log` 追加一行（可用 `DSH_MISTRAL_WIRE_LOG` 改路径）：模型 id、消息条数、每条消息的 role 与键名、带 `reasoning_content` 的消息数，以及序列化 body 的 16 位 SHA-256。第二条 `usage` 行记录 `promptTokens`、`cachedTokens`、服务账号 `account`、`conversation` 摘要、`prefixSha256`、`messages` 与 `prefixMessages`；账号切换会追加一条 `failover` 行，含 `from`、`to` 与失败码。日志保留 400 行，写日志失败不会影响请求。
+每次请求都会向 `%TEMP%\dsh-mistral-wire.log` 追加一行（可用 `DSH_MISTRAL_WIRE_LOG` 改路径）：模型 id、消息条数、每条消息的 role 与键名、带 `reasoning_content` 的消息数、服务账号 `account`、实际放在请求上的 `x-affinity` 值的 16 位摘要（未发送该头时省略），以及序列化 body 的 16 位 SHA-256。第二条 `usage` 行记录 `promptTokens`、`cachedTokens`、服务账号 `account`、`conversation` 摘要、`affinity` 摘要、`prefixSha256`、`messages` 与 `prefixMessages`；账号切换会追加一条 `failover` 行，含 `from`、`to` 与失败码。日志保留 400 行，写日志失败不会影响请求。只有供应商上报了 usage 的完整响应才会写入 `usage` 行，被中断的流不会留下零缓存记录。
 
 日志以 `0600` 权限创建：`%TEMP%` 通常是 `/tmp`（`1777`），而日志条目是提示词元数据。如果旧版本留下了全局可读的文件，下一次写入会把它收紧到 `0600`，轮转也会保持该权限。
 
@@ -308,7 +320,7 @@ Vibe Key 在执行 `vibe --setup` 后位于 `~/.vibe/.env`，也可以在 Code �
 
 ### 为什么提示词缓存命中率是 0%？
 
-通常是三种情况之一：提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。用 `/plugins/dsh-mistral-pro/wire?limit=20` 查看每次请求的 `cachedTokens` 与 `prefixSha256`，用 `/plugins/dsh-mistral-pro/cache` 查看稳态命中率与分布——整份日志的命中率低而稳态命中率高，说明是冷启动，不是缓存坏了。
+通常是三种情况之一：提示词不足 64 token、缓存已在轮次之间过期，或者上游改写了开头的消息。用 `/plugins/dsh-mistral-pro/wire?limit=20` 查看每次请求的 `cachedTokens` 与 `prefixSha256`，用 `/plugins/dsh-mistral-pro/cache` 查看稳态命中率、路由命中率与按账号的拆分——整份日志的命中率低而稳态命中率高，说明是冷启动，不是缓存坏了；`steadyState` 正常而 `steadyStateByRoute` 偏低，说明是账号切换或 key 轮换；所有账号都偏低且 `prefixSha256` 没有变化，则是服务端驱逐，任何插件设置都修不了。
 
 ### API Key 会被发到 Mistral 以外的地方吗？
 
@@ -328,7 +340,7 @@ Vibe Key 在执行 `vibe --setup` 后位于 `~/.vibe/.env`，也可以在 Code �
 ## 已知限制
 
 - `/v1/billing/budget` 与管理站点的额度接口都没有公开文档，插件按字段名读取；上游调整结构时部分窗口可能无法识别。
-- `prompt_cache_key` 只是提示而非保证：前缀稳定也可能在提供方缓存过期后未命中，少于 64 token 的提示词永远不会命中。
+- `prompt_cache_key` 与 `x-affinity` 都只是提示而非保证：前缀稳定、affinity 稳定也可能在提供方缓存过期后未命中，少于 64 token 的提示词永远不会命中，而且 Mistral 已承认存在客户端无法修复的服务端缓存未命中（[mistral-vibe#1512](https://github.com/mistralai/mistral-vibe/issues/1512)）。
 - 容灾切换后的账号顺位只保留在内存中，进程重启后恢复为配置顺序。
 - 图片输入依赖 DSH 的 `attachments` 服务；缺失时会退化为文本占位符。
 - 代理功能要求宿主环境可解析 `undici`，否则请求会直接报错。

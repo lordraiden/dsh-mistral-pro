@@ -4,6 +4,40 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.9.1
+
+### Fixed
+
+- **The prefix observer can no longer overstate what it compared.** The comparison is capped at 512 messages, so
+  when both requests exceeded the cap the first 512 could match while a later message differed, and the observer
+  still reported `repeat` (or a verified `append`/`rewrite`). It now reports `unknown` whenever at least one list
+  extends beyond the cap and the unexamined suffixes could differ. `repeat` requires both lists to have been fully
+  compared, an `append` is only claimed when the entire previous list was retained and matched, and a `rewrite` is
+  only claimed for a divergence inside the compared range or a fully compared truncation.
+- **A prompt-cache key is no longer used as a conversation identity.** `shared` mode and custom keys are designed
+  to be shared across independent conversations, so comparing them would invent `append`/`rewrite`/`repeat`
+  relationships between unrelated sessions. The observer now uses DSH's session id only, and a request without one
+  carries no relation.
+- **The observer is only updated for an actual outbound attempt.** A call that fails before the transport (missing
+  credentials, an already-aborted request, a transport that cannot be prepared) no longer becomes the previous
+  request for the next comparison. A request that reaches the transport counts as attempted even if the transport
+  then fails, and one logical request is observed once across account failover attempts.
+
+### Changed
+
+- **`prefixRelation: unknown`** is a new value for a comparison that reached the 512-message cap without finding a
+  divergence.
+- **Documentation corrections.** `steadyState` is documented as excluding the first observed usage entry of each
+  prompt-cache-key digest in the retained window — a cache-key family, not necessarily one conversation, and not a
+  guaranteed cold start. `prefixRelation: append` is documented as a comparison of the wire `messages` list only,
+  not proof that the complete effective prompt or every cache-relevant request input is unchanged.
+
+### Tests
+
+`test/prefix-fingerprint.mjs` covers the cap conservatism (equal-length and different-length lists that diverge
+after message 512), session-only identity with independent `shared`/custom-key sessions, credential and abort
+failures that must not be observed, transport failures that must, and failover as one logical observation.
+
 ## 0.9.0
 
 ### Cache diagnostics

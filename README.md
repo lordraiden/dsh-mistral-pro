@@ -2,7 +2,7 @@
 
 **Mistral subscription (Vibe Pro / Team) provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).** Adds the `mistral-pro` model route, multi-account failover, prompt-cache tuning, and a sidebar usage card with a statistics panel.
 
-![version](https://img.shields.io/badge/version-0.9.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.9.1-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -318,29 +318,43 @@ normal append-only growth from a rewritten prefix. `prefixRelation` is one of:
 
 | Value | Meaning |
 | --- | --- |
-| `first` | No earlier request of this conversation was observed in this process (first turn, plugin reload, or the conversation was evicted from the bounded cache). |
-| `append` | The previous request's message list is an exact leading sequence of this one: the conversation only grew. |
-| `repeat` | The message list is identical to the previous request (a retry). |
-| `rewrite` | The lists diverge before the end of the shorter one: the system prompt changed, a compaction replaced the history, a tool result was pruned, or the history was truncated. |
+| `first` | No earlier request of this session was observed in this process (first turn, plugin reload, or the session was evicted from the bounded cache). |
+| `append` | The whole previous message list matched the head of a longer current list. Verified even when the current list exceeds the comparison cap, because every previous message was retained and compared. |
+| `repeat` | Both message lists were fully retained and are identical. |
+| `rewrite` | A divergence was found inside the compared range, or the whole current list matched the head of a longer previous list (a truncation). |
+| `unknown` | The compared range matched, but at least one list extends beyond the comparison cap, so the unexamined suffixes could still differ. Equality is never assumed for messages that were not compared. |
 
 `prefixReused` is how many leading messages are byte-identical to the previous request, so `rewrite` with
 `prefixReused: 1` means only the system message survived. The comparison is bounded and in memory: it
-covers at most the first 512 messages of a conversation and the 32 most recently used conversations, it
-keeps only one digest per message, and it never writes message content anywhere. It is also process-local:
-after a restart the first observed request is `first`. Auxiliary calls (session title, compaction,
-auto-review) are not part of the conversation's message sequence, so they carry no relation and do not
-disturb the next comparison.
+covers at most the first 512 messages of a session and the 32 most recently used sessions, it keeps only
+one digest per message, and it never writes message content anywhere. It is also process-local: after a
+restart the first observed request is `first`.
 
-This is a request-structure diagnostic only. It says whether the messages this client sent are the same
-leading sequence as last time; it cannot see the provider's tokenized prefix, its cache placement, or why a
-request missed. A hit rate near 0% with `prefixRelation: append` usually means the prompt is under 64
-tokens, the cache expired between turns, or the provider missed on its side.
+The identity is DSH's session id only. A prompt-cache key is never used as a substitute: `shared` mode and
+custom keys are designed to be shared across independent conversations, so comparing them would invent
+relationships between unrelated sessions. A request without a session id carries no relation, and
+auxiliary calls (session title, compaction, auto-review) are not part of the conversation's message
+sequence, so they carry none either and do not disturb the next comparison.
+
+The observer is only updated for a request that actually reaches the outbound transport: a call that fails
+first (missing credentials, an already-aborted request, a transport that cannot be prepared) is not
+observed, while a request that reaches the transport counts as attempted even if the transport then fails.
+One logical request is observed once, even when it fails over between accounts.
+
+This compares the wire `messages` list only. It does not cover `tools`, `tool_choice`, `temperature`,
+`max_tokens` or any other request field, and it says nothing about tokenization, the provider's cache
+placement or routing. `append` therefore means "the messages this client sent are an append-only extension
+of the previous message list", not "the complete effective prompt and every cache-relevant input are
+unchanged". A hit rate near 0% with `prefixRelation: append` usually means the prompt is under 64 tokens,
+the cache expired between turns, the provider missed on its side, or a non-message request field changed.
 
 `GET /plugins/dsh-mistral-pro/cache` reports the whole-log `requests`, `promptTokens`, `cachedTokens` and
 `hitRate`, plus the views that answer "why is it low":
 
-- `steadyState` — the same numbers without the first request of each conversation, which is cold by
-  design;
+- `steadyState` — the same numbers without the first observed request of each prompt-cache-key digest in
+  the retained window. That group is a cache-key family, not necessarily one conversation: `shared` and
+  custom keys can span independent conversations. The excluded request is not necessarily a real cold
+  start, and the figure is neither a lifetime metric nor a guaranteed warm-conversation hit rate;
 - `steadyStateByRoute` — the same numbers without the first request of each
   `(account, model, affinity, prompt-key)` route. A hit also needs the same serving account, the same model
   and the same effective affinity, so an account failover, a model change, a key rotation after compaction
@@ -363,14 +377,15 @@ from every figure instead of being counted as a zero-cache request.
 
 Reading the numbers, in order:
 
-1. A low whole-log `hitRate` with a high `steadyState` is cold starts, not a broken cache.
+1. A low whole-log `hitRate` with a high `steadyState` usually means cold starts, not a broken cache.
 2. A high `steadyState` but a low `steadyStateByRoute` is account failovers or key rotations — look at
    `coldAfterFailover` and at `byAccount`.
 3. One low `byAccount` entry with the others healthy means that account's traffic is missing; the plugin is
    not rewriting anything.
-4. A low rate in every account and model, with `prefixRelation: append` on the missing turns in `/wire`,
-   points at provider-side eviction — the case Mistral acknowledged in #1512. No client setting fixes it. A
-   `rewrite` instead means this client changed the prefix, and that is actionable.
+4. A low rate in every account and model, with `prefixRelation: append` (or `unknown` once the
+   conversation exceeds the comparison cap) on the missing turns in `/wire`, points at provider-side
+   eviction — the case Mistral acknowledged in #1512. No client setting fixes it. A `rewrite` instead means
+   this client changed the prefix, and that is actionable.
 
 
 ### Usage accounting
@@ -512,9 +527,10 @@ panel and the diagnostic routes. Version numbers are not comparable between the 
   still miss after the provider's cache expires, prompts under 64 tokens never hit, and Mistral has
   acknowledged serving-side cache misses ([mistral-vibe#1512](https://github.com/mistralai/mistral-vibe/issues/1512))
   that no client change can fix.
-- `prefixRelation` is a process-local comparison: it covers the first 512 messages of a conversation and the
-  32 most recently used conversations, and the first request after a plugin restart is reported as `first`.
-  It describes the messages this client sent, not the provider's tokenized prefix or cache state.
+- `prefixRelation` is a process-local comparison: it covers the first 512 messages of a session and the 32 most
+  recently used sessions, reports `unknown` when either list extends past that cap, and reports `first` for the
+  first request after a plugin restart. It describes the messages this client sent, not the provider's tokenized
+  prefix or cache state.
 - `steadyState` and `steadyStateByRoute` are calculations over the retained 400-line log window, not lifetime
   counters: the request they drop is the first one still visible, which may already have been warm.
 - Failover account promotion is kept in memory only and resets to the configured order when the process

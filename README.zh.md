@@ -2,7 +2,7 @@
 
 **在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）中接入 Mistral 订阅（Vibe Pro / Team）的模型提供方插件。** 提供 `mistral-pro` 模型路由、多账号故障切换、提示词缓存调优，以及侧边栏额度卡片与统计面板。
 
-![version](https://img.shields.io/badge/version-0.9.0-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.9.1-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -239,18 +239,23 @@ Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/adv
 
 | 取值 | 含义 |
 | --- | --- |
-| `first` | 本进程内没有观察到该会话更早的请求（首轮、插件重载，或该会话已被有界缓存淘汰）。 |
-| `append` | 上一条请求的消息列表是本条请求的精确前缀：会话只是追加了内容。 |
-| `repeat` | 消息列表与上一条请求完全相同（重试）。 |
-| `rewrite` | 两条列表在较短一条结束前就已分叉：系统提示词变了、压缩替换了历史、工具结果被裁剪，或历史被截断。 |
+| `first` | 本进程内没有观察到该会话（session）更早的请求（首轮、插件重载，或该会话已被有界缓存淘汰）。 |
+| `append` | 上一条消息列表完整匹配了本条更长列表的开头。即使本条列表超过比较上限也仍然成立，因为上一条的每条消息都被保留并比较过。 |
+| `repeat` | 两条消息列表都被完整保留且完全相同。 |
+| `rewrite` | 在比较范围内发现了分叉，或本条完整列表匹配了更长的上一条列表的开头（截断）。 |
+| `unknown` | 比较范围内一致，但至少一条列表超出比较上限，未比较的尾部仍可能不同。绝不假定未比较的消息相等。 |
 
-`prefixReused` 表示与上一条请求逐字节相同的前导消息条数，因此 `rewrite` 且 `prefixReused: 1` 意味着只有系统消息保留了下来。该比较有界且只在内存中：最多覆盖一个会话的前 512 条消息与最近使用的 32 个会话，每条消息只保留一个摘要，消息内容不会写入任何地方。它也是进程内的：进程重启后第一条被观察到的请求会记为 `first`。辅助调用（会话标题、压缩、自动评审）不属于会话的消息序列，因此不带该字段，也不会干扰下一次比较。
+`prefixReused` 表示与上一条请求逐字节相同的前导消息条数，因此 `rewrite` 且 `prefixReused: 1` 意味着只有系统消息保留了下来。该比较有界且只在内存中：最多覆盖一个会话的前 512 条消息与最近使用的 32 个会话，每条消息只保留一个摘要，消息内容不会写入任何地方。它也是进程内的：进程重启后第一条被观察到的请求会记为 `first`。
 
-这只是请求结构层面的诊断：它说明本客户端发送的消息是否与上次是同一段前导序列，看不到提供方实际分词后的前缀、缓存落点，也无法解释为什么未命中。命中率接近 0% 而 `prefixRelation: append` 时，通常意味着提示词不足 64 token、缓存已在轮次之间过期，或者提供方自身未命中。
+身份只使用 DSH 的 session id。绝不拿 prompt 缓存 key 代替：`shared` 模式与自定义 key 本来就是跨独立会话共享的，用它们比较会在无关会话之间凭空制造关系。没有 session id 的请求不带该字段；辅助调用（会话标题、压缩、自动评审）不属于会话的消息序列，因此也不带该字段，且不会干扰下一次比较。
+
+只有真正到达出站传输的请求才会更新观察器：在更早阶段失败的调用（缺少凭据、请求已被中止、无法准备传输）不会被观察；而到达传输的请求即使随后失败也算作已尝试。一次逻辑请求只观察一次，即使它在账号之间容灾切换。
+
+这里只比较 wire 的 `messages` 列表。它不覆盖 `tools`、`tool_choice`、`temperature`、`max_tokens` 或其他请求字段，也不涉及分词、提供方的缓存落点或路由。因此 `append` 只表示「本客户端发送的消息是上一条消息列表的纯追加」，而不是「完整的有效 prompt 与所有与缓存相关的输入都未改变」。命中率接近 0% 而 `prefixRelation: append` 时，通常意味着提示词不足 64 token、缓存已在轮次之间过期、提供方自身未命中，或者某个非消息请求字段发生了变化。
 
 `GET /plugins/dsh-mistral-pro/cache` 会汇总整份日志的 `requests`、`promptTokens`、`cachedTokens` 和 `hitRate`，并给出回答「为什么这么低」的视图：
 
-- `steadyState`——去掉每个会话第一条请求后的同一组数字，那条请求本来就必然冷启动；
+- `steadyState`——去掉保留窗口内每个 prompt 缓存 key 摘要的第一条被观察到的请求后的同一组数字。该分组是一个缓存 key 家族，不一定是一个会话：`shared` 与自定义 key 可以跨独立会话。被去掉的那条请求不一定真的冷启动，该数字既不是生命周期指标，也不是保证的「热会话命中率」；
 - `steadyStateByRoute`——再去掉每个 `(account, model, affinity, prompt-key)` 路由的第一条请求。命中还要求服务账号、模型与生效 affinity 相同，因此账号切换、模型变更、压缩后的 key 轮换或新的 affinity 都属于冷启动，即使会话本身已经热了。模型属于该身份的一部分，因为自定义 `prompt_cache_key` 不携带模型。切换账号时这个数字更诚实；`steadyState` 仍保持它原本「只看 prompt key」的含义；
 - `window`——这些数字所基于的保留日志窗口（`maxLines`、`entries`）。这里每个比率都相对于该窗口：稳态视图去掉的是「窗口内仍可见的第一条请求」，不一定真的是一次冷启动，而某个路由可能早在更早的记录被轮转掉之前就已经热了；
 - `distribution`——每个请求的命中率落在哪个区间（`0`、`1-25`、`26-50`、`51-75`、`76-99`、`100`）；
@@ -262,10 +267,10 @@ Mistral 的[提示词缓存](https://docs.mistral.ai/inference/conversations/adv
 
 按顺序读这些数字：
 
-1. 整份日志 `hitRate` 低而 `steadyState` 高，是冷启动，不是缓存坏了。
+1. 整份日志 `hitRate` 低而 `steadyState` 高，通常说明是冷启动，不是缓存坏了。
 2. `steadyState` 高但 `steadyStateByRoute` 低，是账号切换或 key 轮换——看 `coldAfterFailover` 与 `byAccount`。
 3. 某个 `byAccount` 分组偏低而其他正常，说明那个账号的流量在漏，插件没有改写任何东西。
-4. 所有账号与模型都偏低，且 `/wire` 中缺失的那些轮次显示 `prefixRelation: append`，指向服务端驱逐——也就是 Mistral 在 #1512 中承认的情况，任何客户端设置都修不了。若显示 `rewrite`，则说明是本客户端改动了前缀，那是可以处理的。
+4. 所有账号与模型都偏低，且 `/wire` 中缺失的那些轮次显示 `prefixRelation: append`（会话超过比较上限时为 `unknown`），指向服务端驱逐——也就是 Mistral 在 #1512 中承认的情况，任何客户端设置都修不了。若显示 `rewrite`，则说明是本客户端改动了前缀，那是可以处理的。
 
 
 ### 用量口径
@@ -355,7 +360,7 @@ Vibe Key 在执行 `vibe --setup` 后位于 `~/.vibe/.env`，也可以在 Code �
 
 - `/v1/billing/budget` 与管理站点的额度接口都没有公开文档，插件按字段名读取；上游调整结构时部分窗口可能无法识别。
 - `prompt_cache_key` 与 `x-affinity` 都只是提示而非保证：前缀稳定、affinity 稳定也可能在提供方缓存过期后未命中，少于 64 token 的提示词永远不会命中，而且 Mistral 已承认存在客户端无法修复的服务端缓存未命中（[mistral-vibe#1512](https://github.com/mistralai/mistral-vibe/issues/1512)）。
-- `prefixRelation` 是进程内的比较：最多覆盖一个会话的前 512 条消息与最近使用的 32 个会话，插件重启后的第一条请求会记为 `first`。它描述的是本客户端发送的消息，而不是提供方分词后的前缀或缓存状态。
+- `prefixRelation` 是进程内的比较：最多覆盖一个会话的前 512 条消息与最近使用的 32 个会话，任一方超出该上限时报告 `unknown`，插件重启后的第一条请求报告为 `first`。它描述的是本客户端发送的消息，而不是提供方分词后的前缀或缓存状态。
 - `steadyState` 与 `steadyStateByRoute` 是对保留的 400 行日志窗口的计算，不是生命周期计数器：它们去掉的是窗口内仍可见的第一条请求，那条请求可能本来就是热的。
 - 容灾切换后的账号顺位只保留在内存中，进程重启后恢复为配置顺序。
 - 图片输入依赖 DSH 的 `attachments` 服务；缺失时会退化为文本占位符。

@@ -4,6 +4,19 @@ Fork of [`01NGVI-QINGYI/dsh-mistral-pro`](https://github.com/01NGVI-QINGYI/dsh-m
 [`santera-pixel/dsh-mistral-pro`](https://github.com/santera-pixel/dsh-mistral-pro). Entries below are additions on
 top of upstream `0.1.2`.
 
+## 0.9.2
+
+### Fixed
+
+- **The plugin loads on DSH 0.2.3-alpha.2.** `@deepseek-ai/dsh-llm` removed the `assertUsableApiKey` export in
+  0.2.3-alpha.2, so `lib/accounts.js` failed to import it and the plugin could not load. The same transport check
+  (trim surrounding whitespace, reject a blank key, reject characters an HTTP header cannot carry) is now
+  implemented locally, so the plugin loads on both 0.2.2-rc.5 and 0.2.3-alpha.2. Covered by `test/api-key.mjs`.
+- **Compatibility is verified against the latest published release.** `engines.dsh` (`>=0.2.1-rc.5`) is the sole
+  compatibility check DSH applies, and it matches 0.2.3-alpha.2 under DSH's prerelease-inclusive matching. The full
+  regression suite passes against the 0.2.3-alpha.2 `dsh-llm` and `dsh-launch-environment` packages, and the
+  upgrade guides for 0.2.3-alpha.1/alpha.2 list no other change that affects the APIs this plugin uses.
+
 ## 0.9.1
 
 ### Fixed

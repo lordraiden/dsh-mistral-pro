@@ -2,7 +2,7 @@
 
 **DeepSeek Harness（DSH）で Mistral のサブスクリプション（Vibe Pro / Team）を使うためのモデルプロバイダープラグインです。** `mistral-pro` モデルルート、複数アカウントのフェイルオーバー、プロンプトキャッシュのチューニング、入力欄ツールバーの使用量パネルを提供します。
 
-![version](https://img.shields.io/badge/version-0.9.1-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
+![version](https://img.shields.io/badge/version-0.9.2-555?style=flat-square) ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5-4c84f4?style=flat-square) ![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square) ![EN · 中 · 日](https://img.shields.io/badge/EN%20%C2%B7%20%E4%B8%AD%20%C2%B7%20%E6%97%A5-555?style=flat-square)
 
 [English](README.md) · [中文](README.zh.md) · [日本語](README.ja.md)
 
@@ -54,7 +54,7 @@
 
 ## 動作環境
 
-- DSH `>= 0.2.1-rc.5`
+- DSH `>= 0.2.1-rc.5`（0.2.2-rc.5 と 0.2.3-alpha.2 で検証済み）
 - Node `^22.19.0 || >=24.0.0`
 - Mistral アカウント（無料枠、Vibe Pro / Team、従量課金のいずれか）
 
